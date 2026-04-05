@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.expo/
+.next/
+.vscode/
+apps/*/node_modules/
+packages/*/node_modules/

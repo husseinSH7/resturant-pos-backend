@@ -1,0 +1,17 @@
+{
+  "name": "restaurant-pos",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:web": "npm --workspace apps/dashboard-web run dev",
+    "dev:pos": "npm --workspace apps/pos-mobile run start",
+    "dev:kds": "npm --workspace apps/kds-mobile run start",
+    "build:api": "npm --workspace apps/api run build",
+    "build:web": "npm --workspace apps/dashboard-web run build"
+  }
+}
