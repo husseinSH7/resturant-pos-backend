@@ -1,29 +1,22 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    // File Layout
-    // "rootDir": "./src",
-    // "outDir": "./dist",
-
     "outDir": "dist",
-    "rootDir": "src",
+    "ignoreDeprecations": "6.0",
+    "rootDir": ".",
 
-    // Environment Settings
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "esnext",
-    "types": [],
+    "types": ["node"],
 
-    // Other Outputs
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
 
-    // Stricter Typechecking Options
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
 
-    // Recommended Options
     "strict": true,
     "jsx": "react-jsx",
     "verbatimModuleSyntax": true,
@@ -32,5 +25,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src", "prisma"]
 }

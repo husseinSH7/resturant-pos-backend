@@ -1,13 +1,166 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  CASHIER
+  KITCHEN
+}
+
+enum OrderStatus {
+  OPEN
+  PAID
+  VOIDED
+  COMPLETED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MIXED
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+model Restaurant {
+  id          String      @id @default(uuid())
+  name        String
+  slug        String      @unique
+  address     String?
+  phone       String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  users       User[]
+  categories  Category[]
+  products    Product[]
+  orders      Order[]
+  shifts      Shift[]
+}
+
+model User {
+  id             String      @id @default(uuid())
+  restaurantId   String
+  fullName       String
+  pin            String
+  email          String?     @unique
+  role           UserRole
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  shifts         Shift[]
+  orders         Order[]
+
+  @@index([restaurantId])
+  @@index([restaurantId, role])
+}
+
+model Category {
+  id             String      @id @default(uuid())
+  restaurantId   String
+  name           String
+  sortOrder      Int         @default(0)
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  products       Product[]
+
+  @@index([restaurantId])
+  @@unique([restaurantId, name])
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  restaurantId   String
+  categoryId     String
+  name           String
+  description    String?
+  price          Decimal     @db.Decimal(10, 2)
+  sku            String?
+  isActive       Boolean     @default(true)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category       Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  orderItems     OrderItem[]
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@unique([restaurantId, name])
+}
+
+model Order {
+  id                  String         @id @default(uuid())
+  restaurantId        String
+  userId              String
+  orderNumber         Int
+  status              OrderStatus    @default(OPEN)
+  paymentMethod       PaymentMethod?
+  subtotal            Decimal        @default(0) @db.Decimal(10, 2)
+  taxAmount           Decimal        @default(0) @db.Decimal(10, 2)
+  totalAmount         Decimal        @default(0) @db.Decimal(10, 2)
+  terminalReference   String?
+  notes               String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  restaurant          Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  user                User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items               OrderItem[]
+
+  @@index([restaurantId])
+  @@index([userId])
+  @@unique([restaurantId, orderNumber])
+}
+
+model OrderItem {
+  id             String      @id @default(uuid())
+  orderId        String
+  productId      String
+  quantity       Int
+  unitPrice      Decimal     @db.Decimal(10, 2)
+  totalPrice     Decimal     @db.Decimal(10, 2)
+  notes          String?
+  createdAt      DateTime    @default(now())
+
+  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Shift {
+  id             String       @id @default(uuid())
+  restaurantId   String
+  userId         String
+  status         ShiftStatus  @default(OPEN)
+  openedAt       DateTime     @default(now())
+  closedAt       DateTime?
+  openingCash    Decimal?     @db.Decimal(10, 2)
+  closingCash    Decimal?     @db.Decimal(10, 2)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  restaurant     Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([restaurantId])
+  @@index([userId])
 }
