@@ -296,6 +296,24 @@ async function main() {
     },
   });
 
+  await prisma.table.upsert({
+    where: {
+      restaurantId_name: {
+        restaurantId: restaurant.id,
+        name: "1",
+      },
+    },
+    update: {},
+    create: {
+      restaurantId: restaurant.id,
+      name: "1",
+      seats: 4,
+      area: "Main Hall",
+      shape: "circle",
+      status: "AVAILABLE",
+    },
+  });
+
   console.log("Seed completed successfully");
   console.log({
     restaurant: {
