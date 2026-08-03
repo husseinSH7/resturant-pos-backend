@@ -200,6 +200,60 @@ export async function addOrderItems(
   return createdItems.map(mapItem);
 }
 
+export async function markItemPrepared(restaurantId: string, userId: string, orderItemId: string) {
+  const item = await prisma.orderItem.findFirst({
+    where: { id: orderItemId },
+    include: { order: true },
+  });
+
+  if (!item) throw new Error("Order item not found");
+  if (item.order.restaurantId !== restaurantId) throw new Error("Access denied");
+
+  const updated = await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { preparedAt: new Date() },
+    include: { product: true, modifiers: true },
+  });
+
+  await prisma.orderChangeLog.create({
+    data: {
+      orderId: item.orderId,
+      userId,
+      action: "ITEM_PREPARED",
+      payload: { orderItemId, productId: item.productId } as any,
+    },
+  });
+
+  return mapItem(updated);
+}
+
+export async function markItemServed(restaurantId: string, userId: string, orderItemId: string) {
+  const item = await prisma.orderItem.findFirst({
+    where: { id: orderItemId },
+    include: { order: true },
+  });
+
+  if (!item) throw new Error("Order item not found");
+  if (item.order.restaurantId !== restaurantId) throw new Error("Access denied");
+
+  const updated = await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { servedAt: new Date() },
+    include: { product: true, modifiers: true },
+  });
+
+  await prisma.orderChangeLog.create({
+    data: {
+      orderId: item.orderId,
+      userId,
+      action: "ITEM_SERVED",
+      payload: { orderItemId, productId: item.productId } as any,
+    },
+  });
+
+  return mapItem(updated);
+}
+
 export async function payOrder(
   restaurantId: string,
   userId: string,
@@ -210,6 +264,7 @@ export async function payOrder(
     changeDue?: number;
     tipAmount?: number;
     terminalReference?: string;
+    tipDistribution?: { userId: string; percentage: number }[];
   }
 ) {
   const order = await prisma.order.findFirst({
@@ -228,7 +283,7 @@ export async function payOrder(
       });
     }
 
-    return tx.order.update({
+    const updatedOrder = await tx.order.update({
       where: { id: orderId },
       data: {
         status: OrderStatus.PAID,
@@ -243,6 +298,33 @@ export async function payOrder(
         items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
       },
     });
+
+    // Handle tip distribution if provided
+    if (data.tipAmount && data.tipDistribution && data.tipDistribution.length > 0) {
+      for (const dist of data.tipDistribution) {
+        const amount = (data.tipAmount * dist.percentage) / 100;
+        await tx.tipDistribution.create({
+          data: {
+            orderId,
+            userId: dist.userId,
+            amount: new Prisma.Decimal(amount),
+            percentage: new Prisma.Decimal(dist.percentage),
+          },
+        });
+      }
+    } else if (data.tipAmount) {
+      // Default: 100% to the order creator
+      await tx.tipDistribution.create({
+        data: {
+          orderId,
+          userId: order.userId,
+          amount: new Prisma.Decimal(data.tipAmount),
+          percentage: new Prisma.Decimal(100),
+        },
+      });
+    }
+
+    return updatedOrder;
   });
 
   await prisma.orderChangeLog.create({

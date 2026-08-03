@@ -6,6 +6,350 @@ datasource db {
   provider = "postgresql"
 }
 
+model Restaurant {
+  id            String          @id @default(uuid())
+  name          String
+  slug          String          @unique
+  address       String?
+  phone         String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  categories    Category[]
+  customers     Customer[]
+  KitchenTicket KitchenTicket[]
+  ModifierGroup ModifierGroup[]
+  orders        Order[]
+  Payment       Payment[]
+  products      Product[]
+  Refund        Refund[]
+  shifts        Shift[]
+  tables        Table[]
+  TableArea     TableArea[]
+  users         User[]
+}
+
+model User {
+  id           String     @id @default(uuid())
+  restaurantId String
+  fullName     String
+  pin          String
+  email        String?    @unique
+  role         UserRole
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orders       Order[]
+  Payment      Payment[]
+  Refund       Refund[]
+  shifts       Shift[]
+  Table        Table[]
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([restaurantId, role])
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  restaurantId String
+  name         String
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  products     Product[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+}
+
+model Product {
+  id                   String                 @id @default(uuid())
+  restaurantId         String
+  categoryId           String
+  name                 String
+  description          String?
+  price                Decimal                @db.Decimal(10, 2)
+  sku                  String?
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  imageUrl             String?
+  orderItems           OrderItem[]
+  category             Category               @relation(fields: [categoryId], references: [id])
+  restaurant           Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  ProductModifierGroup ProductModifierGroup[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@index([categoryId])
+}
+
+model ModifierGroup {
+  id                   String                 @id @default(uuid())
+  restaurantId         String
+  name                 String
+  selectionType        ModifierSelectionType  @default(SINGLE)
+  isRequired           Boolean                @default(false)
+  minSelect            Int                    @default(0)
+  maxSelect            Int?
+  sortOrder            Int                    @default(0)
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  Restaurant           Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  options              ModifierOption[]
+  ProductModifierGroup ProductModifierGroup[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+}
+
+model ModifierOption {
+  id              String              @id @default(uuid())
+  modifierGroupId String
+  name            String
+  priceDelta      Decimal             @default(0) @db.Decimal(10, 2)
+  sortOrder       Int                 @default(0)
+  isActive        Boolean             @default(true)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  modifierGroup   ModifierGroup       @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  orderModifiers  OrderItemModifier[]
+
+  @@unique([modifierGroupId, name])
+  @@index([modifierGroupId])
+}
+
+model Table {
+  id           String      @id @default(uuid())
+  restaurantId String
+  areaId       String?
+  name         String
+  seats        Int         @default(2)
+  status       TableStatus @default(AVAILABLE)
+  x            Int?
+  y            Int?
+  width        Int?
+  height       Int?
+  shape        TableShape?
+  rotation     Int         @default(0)
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  guestCount   Int         @default(0)
+  notes        String?
+  occupiedAt   DateTime?
+  paidAt       DateTime?
+  serverId     String?
+  orders       Order[]
+  TableArea    TableArea?  @relation(fields: [areaId], references: [id])
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  User         User?       @relation(fields: [serverId], references: [id])
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@index([areaId])
+  @@index([serverId])
+  @@index([status])
+}
+
+model Customer {
+  id           String     @id @default(uuid())
+  restaurantId String
+  fullName     String
+  phone        String?
+  email        String?
+  notes        String?
+  points       Int        @default(0)
+  totalSpent   Decimal    @default(0) @db.Decimal(10, 2)
+  visitCount   Int        @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders       Order[]
+
+  @@index([restaurantId])
+  @@index([restaurantId, email])
+  @@index([restaurantId, phone])
+}
+
+model Order {
+  id                String         @id @default(uuid())
+  restaurantId      String
+  userId            String
+  orderNumber       Int
+  status            OrderStatus    @default(OPEN)
+  paymentMethod     PaymentMethod?
+  subtotal          Decimal        @default(0) @db.Decimal(10, 2)
+  taxAmount         Decimal        @default(0) @db.Decimal(10, 2)
+  totalAmount       Decimal        @default(0) @db.Decimal(10, 2)
+  terminalReference String?
+  notes             String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  customerId        String?
+  isOpen            Boolean        @default(true)
+  orderType         OrderType      @default(DINE_IN)
+  tableId           String?
+  KitchenTicket     KitchenTicket?
+  customer          Customer?      @relation(fields: [customerId], references: [id])
+  restaurant        Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table             Table?         @relation(fields: [tableId], references: [id])
+  user              User           @relation(fields: [userId], references: [id])
+  items             OrderItem[]
+  Payment           Payment[]
+
+  @@unique([restaurantId, orderNumber])
+  @@index([restaurantId])
+  @@index([userId])
+  @@index([tableId])
+  @@index([customerId])
+}
+
+model OrderItem {
+  id         String              @id @default(uuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal             @db.Decimal(10, 2)
+  totalPrice Decimal             @db.Decimal(10, 2)
+  notes      String?
+  createdAt  DateTime            @default(now())
+  order      Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product             @relation(fields: [productId], references: [id])
+  modifiers  OrderItemModifier[]
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderItemModifier {
+  id               String         @id @default(uuid())
+  orderItemId      String
+  modifierOptionId String
+  nameSnapshot     String
+  priceDelta       Decimal        @default(0) @db.Decimal(10, 2)
+  createdAt        DateTime       @default(now())
+  modifierOption   ModifierOption @relation(fields: [modifierOptionId], references: [id])
+  orderItem        OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderItemId])
+  @@index([modifierOptionId])
+}
+
+model Refund {
+  id           String     @id @default(uuid())
+  restaurantId String
+  userId       String
+  paymentId    String
+  amount       Decimal    @db.Decimal(10, 2)
+  reason       String
+  reference    String?
+  status       String     @default("PROCESSED")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Payment      Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  Restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  User         User       @relation(fields: [userId], references: [id])
+
+  @@index([paymentId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([userId])
+}
+
+model Shift {
+  id           String      @id @default(uuid())
+  restaurantId String
+  userId       String
+  status       ShiftStatus @default(OPEN)
+  openedAt     DateTime    @default(now())
+  closedAt     DateTime?
+  openingCash  Decimal?    @db.Decimal(10, 2)
+  closingCash  Decimal?    @db.Decimal(10, 2)
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id])
+
+  @@index([restaurantId])
+  @@index([userId])
+}
+
+model KitchenTicket {
+  id           String        @id
+  restaurantId String
+  orderId      String        @unique
+  status       KitchenStatus @default(PENDING)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime
+  Order        Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Restaurant   Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model Payment {
+  id                String        @id
+  restaurantId      String
+  userId            String
+  orderId           String
+  amount            Decimal       @db.Decimal(10, 2)
+  method            PaymentMethod
+  terminalReference String?
+  cardLast4         String?
+  tipAmount         Decimal       @default(0) @db.Decimal(10, 2)
+  cashTendered      Decimal?      @db.Decimal(10, 2)
+  changeAmount      Decimal?      @db.Decimal(10, 2)
+  reference         String?
+  status            String        @default("COMPLETED")
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime
+  Order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Restaurant        Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  User              User          @relation(fields: [userId], references: [id])
+  Refund            Refund[]
+
+  @@index([orderId])
+  @@index([restaurantId])
+  @@index([status])
+  @@index([userId])
+}
+
+model ProductModifierGroup {
+  id              String        @id
+  productId       String
+  modifierGroupId String
+  sortOrder       Int           @default(0)
+  ModifierGroup   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+  Product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, modifierGroupId])
+  @@index([modifierGroupId])
+  @@index([productId])
+}
+
+model TableArea {
+  id           String     @id
+  restaurantId String
+  name         String
+  sortOrder    Int        @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime
+  Table        Table[]
+  Restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+}
+
 enum UserRole {
   OWNER
   MANAGER
@@ -17,15 +361,14 @@ enum OrderStatus {
   OPEN
   PAID
   VOIDED
-  REFUNDED
   COMPLETED
+  MERGED
 }
 
 enum KitchenStatus {
   PENDING
   PREPARING
   READY
-  COMPLETED
 }
 
 enum OrderType {
@@ -48,277 +391,19 @@ enum ShiftStatus {
 enum TableStatus {
   AVAILABLE
   OCCUPIED
-  PAID
   RESERVED
+  DISABLED
+  PAID
   NEEDS_ATTENTION
 }
 
-model Restaurant {
-  id          String       @id @default(uuid())
-  name        String
-  slug        String       @unique
-  address     String?
-  phone       String?
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  users       User[]
-  categories  Category[]
-  products    Product[]
-  orders      Order[]
-  shifts      Shift[]
-  tables      Table[]
-  customers   Customer[]
+enum ModifierSelectionType {
+  SINGLE
+  MULTIPLE
 }
 
-model User {
-  id             String      @id @default(uuid())
-  restaurantId   String
-  fullName       String
-  pin            String
-  email          String?     @unique
-  role           UserRole
-  isActive       Boolean     @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  shifts         Shift[]
-  orders         Order[]
-  changeLogs     OrderChangeLog[]
-
-  @@index([restaurantId])
-  @@index([restaurantId, role])
-}
-
-model Category {
-  id             String      @id @default(uuid())
-  restaurantId   String
-  name           String
-  sortOrder      Int         @default(0)
-  isActive       Boolean     @default(true)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  restaurant     Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  products       Product[]
-
-  @@index([restaurantId])
-  @@unique([restaurantId, name])
-}
-
-model Product {
-  id             String         @id @default(uuid())
-  restaurantId   String
-  categoryId     String
-  name           String
-  description    String?
-  price          Decimal        @db.Decimal(10, 2)
-  sku            String?
-  isActive       Boolean        @default(true)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  restaurant     Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  category       Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  orderItems     OrderItem[]
-  modifierGroups ModifierGroup[]
-
-  @@index([restaurantId])
-  @@index([categoryId])
-  @@unique([restaurantId, name])
-}
-
-model ModifierGroup {
-  id          String          @id @default(uuid())
-  productId   String
-  name        String
-  required    Boolean         @default(false)
-  minChoices  Int             @default(0)
-  maxChoices  Int             @default(1)
-  sortOrder   Int             @default(0)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
-  options     ModifierOption[]
-
-  @@index([productId])
-}
-
-model ModifierOption {
-  id               String            @id @default(uuid())
-  modifierGroupId  String
-  name             String
-  price            Decimal           @default(0) @db.Decimal(10, 2)
-  isActive         Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  modifierGroup    ModifierGroup     @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
-  orderModifiers   OrderItemModifier[]
-
-  @@index([modifierGroupId])
-}
-
-model Table {
-  id            String      @id @default(uuid())
-  restaurantId  String
-  name          String
-  seats         Int         @default(4)
-  area          String      @default("Main Hall")
-  shape         String      @default("circle")
-  x             Int         @default(0)
-  y             Int         @default(0)
-  status        TableStatus @default(AVAILABLE)
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  orders        Order[]
-
-  @@index([restaurantId])
-  @@unique([restaurantId, name])
-}
-
-model Customer {
-  id            String      @id @default(uuid())
-  restaurantId  String
-  name          String
-  phone         String?
-  email         String?
-  loyaltyPoints Int         @default(0)
-  notes         String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  orders        Order[]
-
-  @@index([restaurantId])
-}
-
-model Order {
-  id                  String         @id @default(uuid())
-  restaurantId        String
-  userId              String
-  customerId          String?
-  tableId             String?
-  orderNumber         Int
-  orderType           OrderType      @default(DINE_IN)
-  status              OrderStatus    @default(OPEN)
-  kitchenStatus       KitchenStatus  @default(PENDING)
-  paymentMethod       PaymentMethod?
-  subtotal            Decimal        @default(0) @db.Decimal(10, 2)
-  taxAmount           Decimal        @default(0) @db.Decimal(10, 2)
-  totalAmount         Decimal        @default(0) @db.Decimal(10, 2)
-  amountTendered      Decimal?       @db.Decimal(10, 2)
-  changeDue           Decimal?       @db.Decimal(10, 2)
-  tipAmount           Decimal?       @db.Decimal(10, 2)
-  terminalReference   String?
-  notes               String?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-
-  restaurant          Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  user                User           @relation(fields: [userId], references: [id], onDelete: Restrict)
-  customer            Customer?      @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  table               Table?         @relation(fields: [tableId], references: [id], onDelete: Restrict)
-  items               OrderItem[]
-  refunds             Refund[]
-  changeLogs          OrderChangeLog[]
-
-  @@index([restaurantId])
-  @@index([userId])
-  @@index([tableId])
-  @@unique([restaurantId, orderNumber])
-}
-
-model OrderItem {
-  id             String              @id @default(uuid())
-  orderId        String
-  productId      String
-  quantity       Int
-  unitPrice      Decimal             @db.Decimal(10, 2)
-  totalPrice     Decimal             @db.Decimal(10, 2)
-  notes          String?
-  course         String?
-  preparedAt     DateTime?
-  servedAt       DateTime?
-  createdAt      DateTime            @default(now())
-
-  order          Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
-  modifiers      OrderItemModifier[]
-
-  @@index([orderId])
-  @@index([productId])
-}
-
-model OrderItemModifier {
-  id                 String         @id @default(uuid())
-  orderItemId        String
-  modifierOptionId   String
-  nameSnapshot       String
-  priceSnapshot      Decimal        @db.Decimal(10, 2)
-  quantity           Int            @default(1)
-  totalPrice         Decimal        @db.Decimal(10, 2)
-  createdAt          DateTime       @default(now())
-
-  orderItem          OrderItem      @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
-  modifierOption     ModifierOption @relation(fields: [modifierOptionId], references: [id], onDelete: Restrict)
-
-  @@index([orderItemId])
-  @@index([modifierOptionId])
-}
-
-model Refund {
-  id             String      @id @default(uuid())
-  orderId        String
-  amount         Decimal     @db.Decimal(10, 2)
-  reason         String?
-  paymentMethod  PaymentMethod?
-  createdAt      DateTime    @default(now())
-
-  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-}
-
-model OrderChangeLog {
-  id             String      @id @default(uuid())
-  orderId        String
-  userId         String
-  action         String
-  payload        Json?
-  createdAt      DateTime    @default(now())
-
-  order          Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user           User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  @@index([orderId])
-  @@index([userId])
-}
-
-model Shift {
-  id             String       @id @default(uuid())
-  restaurantId   String
-  userId         String
-  status         ShiftStatus  @default(OPEN)
-  openedAt       DateTime     @default(now())
-  closedAt       DateTime?
-  openingCash    Decimal?     @db.Decimal(10, 2)
-  closingCash    Decimal?     @db.Decimal(10, 2)
-  notes          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-
-  restaurant     Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
-
-  @@index([restaurantId])
-  @@index([userId])
-  @@index([restaurantId, userId, status])
+enum TableShape {
+  RECTANGLE
+  SQUARE
+  ROUND
 }

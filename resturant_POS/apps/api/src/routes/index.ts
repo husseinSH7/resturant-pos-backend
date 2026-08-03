@@ -6,6 +6,7 @@ import tableRoutes from "../modules/tables/tables.routes.js";
 import shiftRoutes from "../modules/shifts/shifts.routes.js";
 import customerRoutes from "../modules/customers/customers.routes.js";
 import kitchenRoutes from "../modules/kitchen/kitchen.routes.js";
+import inventoryRoutes from "../modules/inventory/inventory.routes.js";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/tables", tableRoutes);
 router.use("/shifts", shiftRoutes);
 router.use("/customers", customerRoutes);
 router.use("/kitchen", kitchenRoutes);
+router.use("/inventory", inventoryRoutes);
 
 export default router;
