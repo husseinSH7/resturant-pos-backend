@@ -154,11 +154,15 @@ cd restaurant-pos
 # Install backend dependencies
 npm install
 
-# Copy environment file
-cp .env.example .env
+# Start Postgres and Redis (if using Docker)
+docker compose up -d
 
-# Run database migrations
-npm run migrate
+# Copy environment file for the API
+cp .env.example apps/api/.env
+
+# Run database migrations from the API app
+cd apps/api
+npx prisma migrate dev
 
 # Start backend
 npm run dev
