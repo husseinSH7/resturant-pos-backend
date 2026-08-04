@@ -5,7 +5,10 @@ export async function getTables(restaurantId: string) {
   const tables = await prisma.table.findMany({
     where: { restaurantId, isActive: true },
     orderBy: { name: "asc" },
-    include: { orders: { where: { status: { in: [OrderStatus.OPEN, OrderStatus.PAID] } }, orderBy: { createdAt: "desc" }, take: 1 } },
+    include: {
+      orders: { where: { status: { in: [OrderStatus.OPEN, OrderStatus.PAID] } }, orderBy: { createdAt: "desc" }, take: 1 },
+      TableArea: true,
+    },
   });
 
   return tables.map(mapTable);
@@ -15,18 +18,26 @@ export async function createTable(
   restaurantId: string,
   data: { name: string; seats?: number; area?: string; shape?: string; x?: number; y?: number }
 ) {
+  const areaRecord = data.area
+    ? await prisma.tableArea.upsert({
+        where: { restaurantId_name: { restaurantId, name: data.area } },
+        update: {},
+        create: { id: crypto.randomUUID(), restaurantId, name: data.area, updatedAt: new Date() },
+      })
+    : null;
+
   const table = await prisma.table.create({
     data: {
       restaurantId,
       name: data.name,
       seats: data.seats ?? 4,
-      area: data.area ?? "Main Hall",
-      shape: data.shape ?? "circle",
+      areaId: areaRecord?.id ?? null,
+      shape: normalizeShape(data.shape),
       x: data.x ?? 0,
       y: data.y ?? 0,
       status: TableStatus.AVAILABLE,
     },
-    include: { orders: { where: { status: OrderStatus.OPEN }, take: 1 } },
+    include: { orders: { where: { status: OrderStatus.OPEN }, take: 1 }, TableArea: true },
   });
 
   return mapTable(table);
@@ -54,9 +65,6 @@ export async function transferTable(
     });
     await tx.table.update({ where: { id: source.id }, data: { status: TableStatus.AVAILABLE } });
     await tx.table.update({ where: { id: target.id }, data: { status: TableStatus.OCCUPIED } });
-    await tx.orderChangeLog.create({
-      data: { orderId: sourceOrder.id, userId: "system", action: "TRANSFER", payload: { fromTableId: source.id, toTableId: target.id } as any },
-    });
   });
 
   return { success: true };
@@ -80,7 +88,7 @@ export async function mergeTables(
 
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const order of sourceOrders) {
-      if (targetOrder) {
+      if (targetOrder && order.id !== targetOrder.id) {
         const items = await tx.orderItem.findMany({ where: { orderId: order.id } });
         for (const item of items) {
           await tx.orderItem.create({
@@ -91,7 +99,6 @@ export async function mergeTables(
               unitPrice: item.unitPrice,
               totalPrice: item.totalPrice,
               notes: item.notes,
-              course: item.course,
             },
           });
         }
@@ -99,18 +106,13 @@ export async function mergeTables(
           where: { id: order.id },
           data: { status: OrderStatus.VOIDED, notes: order.notes ? `${order.notes} (merged into ${targetOrder.id})` : `Merged into ${targetOrder.id}` },
         });
-      } else {
+      } else if (!targetOrder) {
         await tx.order.update({ where: { id: order.id }, data: { tableId: target.id } });
       }
     }
 
     await tx.table.updateMany({ where: { id: { in: sourceTableIds } }, data: { status: TableStatus.AVAILABLE } });
     await tx.table.update({ where: { id: target.id }, data: { status: TableStatus.OCCUPIED } });
-
-    const logOrderId = targetOrder ? targetOrder.id : sourceOrders[0]!.id;
-    await tx.orderChangeLog.create({
-      data: { orderId: logOrderId, userId: "system", action: "MERGE", payload: { sourceTableIds, targetTableId } as any },
-    });
 
     if (targetOrder) {
       await recalcOrderTotals(tx, targetOrder.id);
@@ -129,14 +131,23 @@ async function recalcOrderTotals(tx: Prisma.TransactionClient, orderId: string) 
   });
 }
 
+function normalizeShape(shape?: string) {
+  const upper = shape?.toUpperCase();
+  if (upper === "RECTANGLE" || upper === "SQUARE" || upper === "ROUND") {
+    return upper as "RECTANGLE" | "SQUARE" | "ROUND";
+  }
+  return null;
+}
+
 function mapTable(t: any) {
   const openOrderId = t.orders?.find((o: any) => o.status === OrderStatus.OPEN)?.id ?? null;
   return {
     id: t.id,
     name: t.name,
     seats: t.seats,
-    area: t.area,
-    areaName: t.area,
+    area: t.TableArea?.name ?? null,
+    areaName: t.TableArea?.name ?? null,
+    areaId: t.TableArea?.id ?? null,
     shape: t.shape,
     x: t.x,
     y: t.y,

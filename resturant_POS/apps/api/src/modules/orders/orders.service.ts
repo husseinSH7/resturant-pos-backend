@@ -1,5 +1,6 @@
 import { prisma } from "../../prisma.js";
 import { OrderStatus, TableStatus, OrderType, PaymentMethod, Prisma } from "@prisma/client";
+import { createKitchenTicketForOrder } from "../kitchen/kitchen.service.js";
 
 type OrderInputItem = {
   productId: string;
@@ -7,7 +8,6 @@ type OrderInputItem = {
   unitPrice: number;
   totalPrice: number;
   notes?: string;
-  course?: string;
   modifiers?: { modifierOptionId?: string; nameSnapshot?: string; priceDelta?: number }[];
 };
 
@@ -70,7 +70,6 @@ export async function createOrder(
           unitPrice: new Prisma.Decimal(item.unitPrice),
           totalPrice: new Prisma.Decimal(item.totalPrice),
           notes: item.notes ?? null,
-          course: item.course ?? null,
         },
         include: { product: true },
       });
@@ -82,9 +81,7 @@ export async function createOrder(
             orderItemId: createdItem.id,
             modifierOptionId: m.modifierOptionId!,
             nameSnapshot: m.nameSnapshot ?? "Modifier",
-            priceSnapshot: new Prisma.Decimal(m.priceDelta ?? 0),
-            quantity: 1,
-            totalPrice: new Prisma.Decimal(m.priceDelta ?? 0),
+            priceDelta: new Prisma.Decimal(m.priceDelta ?? 0),
           })),
         });
       }
@@ -101,14 +98,7 @@ export async function createOrder(
     },
   });
 
-  await prisma.orderChangeLog.create({
-    data: {
-      orderId: order.id,
-      userId,
-      action: "CREATE",
-      payload: { tableId: data.tableId, itemCount: data.items.length } as any,
-    },
-  });
+  await createKitchenTicketForOrder(restaurantId, order.id);
 
   return mapOrder(full!);
 }
@@ -163,7 +153,6 @@ export async function addOrderItems(
           unitPrice: new Prisma.Decimal(item.unitPrice),
           totalPrice: new Prisma.Decimal(item.totalPrice),
           notes: item.notes ?? null,
-          course: item.course ?? null,
         },
         include: { product: true },
       });
@@ -175,9 +164,7 @@ export async function addOrderItems(
             orderItemId: newItem.id,
             modifierOptionId: m.modifierOptionId!,
             nameSnapshot: m.nameSnapshot ?? "Modifier",
-            priceSnapshot: new Prisma.Decimal(m.priceDelta ?? 0),
-            quantity: 1,
-            totalPrice: new Prisma.Decimal(m.priceDelta ?? 0),
+            priceDelta: new Prisma.Decimal(m.priceDelta ?? 0),
           })),
         });
       }
@@ -193,65 +180,7 @@ export async function addOrderItems(
     return result;
   });
 
-  await prisma.orderChangeLog.create({
-    data: { orderId, userId, action: "ADD_ITEMS", payload: { itemCount: items.length } as any },
-  });
-
   return createdItems.map(mapItem);
-}
-
-export async function markItemPrepared(restaurantId: string, userId: string, orderItemId: string) {
-  const item = await prisma.orderItem.findFirst({
-    where: { id: orderItemId },
-    include: { order: true },
-  });
-
-  if (!item) throw new Error("Order item not found");
-  if (item.order.restaurantId !== restaurantId) throw new Error("Access denied");
-
-  const updated = await prisma.orderItem.update({
-    where: { id: orderItemId },
-    data: { preparedAt: new Date() },
-    include: { product: true, modifiers: true },
-  });
-
-  await prisma.orderChangeLog.create({
-    data: {
-      orderId: item.orderId,
-      userId,
-      action: "ITEM_PREPARED",
-      payload: { orderItemId, productId: item.productId } as any,
-    },
-  });
-
-  return mapItem(updated);
-}
-
-export async function markItemServed(restaurantId: string, userId: string, orderItemId: string) {
-  const item = await prisma.orderItem.findFirst({
-    where: { id: orderItemId },
-    include: { order: true },
-  });
-
-  if (!item) throw new Error("Order item not found");
-  if (item.order.restaurantId !== restaurantId) throw new Error("Access denied");
-
-  const updated = await prisma.orderItem.update({
-    where: { id: orderItemId },
-    data: { servedAt: new Date() },
-    include: { product: true, modifiers: true },
-  });
-
-  await prisma.orderChangeLog.create({
-    data: {
-      orderId: item.orderId,
-      userId,
-      action: "ITEM_SERVED",
-      payload: { orderItemId, productId: item.productId } as any,
-    },
-  });
-
-  return mapItem(updated);
 }
 
 export async function payOrder(
@@ -260,11 +189,7 @@ export async function payOrder(
   orderId: string,
   data: {
     paymentMethod: string;
-    amountTendered?: number;
-    changeDue?: number;
-    tipAmount?: number;
     terminalReference?: string;
-    tipDistribution?: { userId: string; percentage: number }[];
   }
 ) {
   const order = await prisma.order.findFirst({
@@ -288,9 +213,6 @@ export async function payOrder(
       data: {
         status: OrderStatus.PAID,
         paymentMethod: data.paymentMethod as PaymentMethod,
-        amountTendered: data.amountTendered !== undefined ? new Prisma.Decimal(data.amountTendered) : null,
-        changeDue: data.changeDue !== undefined ? new Prisma.Decimal(data.changeDue) : null,
-        tipAmount: data.tipAmount !== undefined ? new Prisma.Decimal(data.tipAmount) : null,
         terminalReference: data.terminalReference ?? null,
       },
       include: {
@@ -299,36 +221,7 @@ export async function payOrder(
       },
     });
 
-    // Handle tip distribution if provided
-    if (data.tipAmount && data.tipDistribution && data.tipDistribution.length > 0) {
-      for (const dist of data.tipDistribution) {
-        const amount = (data.tipAmount * dist.percentage) / 100;
-        await tx.tipDistribution.create({
-          data: {
-            orderId,
-            userId: dist.userId,
-            amount: new Prisma.Decimal(amount),
-            percentage: new Prisma.Decimal(dist.percentage),
-          },
-        });
-      }
-    } else if (data.tipAmount) {
-      // Default: 100% to the order creator
-      await tx.tipDistribution.create({
-        data: {
-          orderId,
-          userId: order.userId,
-          amount: new Prisma.Decimal(data.tipAmount),
-          percentage: new Prisma.Decimal(100),
-        },
-      });
-    }
-
     return updatedOrder;
-  });
-
-  await prisma.orderChangeLog.create({
-    data: { orderId, userId, action: "PAY", payload: data as any },
   });
 
   return mapOrder(updated);
@@ -357,10 +250,6 @@ export async function voidOrder(restaurantId: string, userId: string, orderId: s
         items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
       },
     });
-  });
-
-  await prisma.orderChangeLog.create({
-    data: { orderId, userId, action: "VOID", payload: { reason } as any },
   });
 
   return mapOrder(updated);
@@ -399,14 +288,10 @@ function mapOrder(order: any) {
     orderNumber: order.orderNumber,
     orderType: order.orderType,
     status: order.status,
-    kitchenStatus: order.kitchenStatus,
     paymentMethod: order.paymentMethod,
     subtotal: order.subtotal.toNumber(),
     taxAmount: order.taxAmount.toNumber(),
     totalAmount: order.totalAmount.toNumber(),
-    amountTendered: order.amountTendered?.toNumber() ?? null,
-    changeDue: order.changeDue?.toNumber() ?? null,
-    tipAmount: order.tipAmount?.toNumber() ?? null,
     terminalReference: order.terminalReference,
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
@@ -425,16 +310,16 @@ function mapItem(item: any) {
     unitPrice: item.unitPrice.toNumber(),
     totalPrice: item.totalPrice.toNumber(),
     notes: item.notes,
-    course: item.course,
     product: item.product ? { id: item.product.id, name: item.product.name, price: item.product.price.toNumber() } : undefined,
     modifiers: item.modifiers.map((m: any) => ({
       id: m.id,
       modifierOptionId: m.modifierOptionId,
       name: m.nameSnapshot,
       nameSnapshot: m.nameSnapshot,
-      priceSnapshot: m.priceSnapshot.toNumber(),
-      quantity: m.quantity,
-      totalPrice: m.totalPrice.toNumber(),
+      priceDelta: m.priceDelta.toNumber(),
+      priceSnapshot: m.priceDelta.toNumber(),
+      quantity: 1,
+      totalPrice: m.priceDelta.toNumber(),
     })),
   };
 }

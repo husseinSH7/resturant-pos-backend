@@ -28,15 +28,44 @@ export async function getProducts(restaurantId: string) {
   const products = await prisma.product.findMany({
     where: { restaurantId, isActive: true },
     orderBy: { name: "asc" },
+    include: { category: true },
+  });
+
+  const productModifierGroups = await prisma.productModifierGroup.findMany({
+    where: { productId: { in: products.map((p) => p.id) } },
     include: {
-      category: true,
-      modifierGroups: {
-        where: { options: { some: { isActive: true } } },
-        include: { options: { where: { isActive: true }, orderBy: { name: "asc" } } },
-        orderBy: { sortOrder: "asc" },
+      ModifierGroup: {
+        include: {
+          options: { where: { isActive: true }, orderBy: { name: "asc" } },
+        },
       },
     },
+    orderBy: { sortOrder: "asc" },
   });
+
+  const modifierGroupsByProductId = new Map<string, any[]>();
+  for (const join of productModifierGroups) {
+    const g = join.ModifierGroup;
+    if (!g) continue;
+    const mapped = {
+      modifierGroup: {
+        id: g.id,
+        name: g.name,
+        isRequired: g.isRequired,
+        selectionType: g.maxSelect === 1 ? "SINGLE" : "MULTIPLE",
+        minChoices: g.minSelect,
+        maxChoices: g.maxSelect,
+        options: g.options.map((o) => ({
+          id: o.id,
+          name: o.name,
+          priceDelta: o.priceDelta.toNumber(),
+        })),
+      },
+    };
+    const list = modifierGroupsByProductId.get(join.productId) ?? [];
+    list.push(mapped);
+    modifierGroupsByProductId.set(join.productId, list);
+  }
 
   return products.map((p) => ({
     id: p.id,
@@ -49,20 +78,6 @@ export async function getProducts(restaurantId: string) {
     categoryId: p.categoryId,
     categoryName: p.category.name,
     available: true,
-    modifierGroups: p.modifierGroups.map((g) => ({
-      modifierGroup: {
-        id: g.id,
-        name: g.name,
-        isRequired: g.required,
-        selectionType: g.maxChoices === 1 ? "SINGLE" : "MULTIPLE",
-        minChoices: g.minChoices,
-        maxChoices: g.maxChoices,
-        options: g.options.map((o) => ({
-          id: o.id,
-          name: o.name,
-          priceDelta: o.price.toNumber(),
-        })),
-      },
-    })),
+    modifierGroups: modifierGroupsByProductId.get(p.id) ?? [],
   }));
 }
