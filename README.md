@@ -174,7 +174,7 @@ npm run dev
 DATABASE_URL=postgresql://user:password@localhost:5432/restaurant_pos
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=your-secret
-API_BASE_URL=https://api.yourpos.com/v1
+API_BASE_URL=http://localhost:4000/api/v1
 STORAGE_BUCKET=your-pos-assets
 WEBSOCKET_URL=wss://api.yourpos.com
 ```
@@ -186,7 +186,7 @@ WEBSOCKET_URL=wss://api.yourpos.com
 ### Base URL
 
 ```text
-https://api.yourpos.com/v1
+http://localhost:4000/api/v1
 ```
 
 ### Authentication Headers

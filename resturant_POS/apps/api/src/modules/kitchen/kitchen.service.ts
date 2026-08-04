@@ -1,42 +1,45 @@
 import { prisma } from "../../prisma.js";
-import { KitchenStatus, OrderStatus } from "@prisma/client";
+import { KitchenStatus } from "@prisma/client";
 
 export async function getTickets(restaurantId: string) {
-  const orders = await prisma.order.findMany({
+  const tickets = await prisma.kitchenTicket.findMany({
     where: {
       restaurantId,
-      status: { in: [OrderStatus.OPEN, OrderStatus.PAID] },
-      kitchenStatus: { in: [KitchenStatus.PENDING, KitchenStatus.PREPARING, KitchenStatus.READY] },
+      status: { in: [KitchenStatus.PENDING, KitchenStatus.PREPARING, KitchenStatus.READY] },
     },
     orderBy: { createdAt: "asc" },
     include: {
-      table: true,
-      items: {
-        include: { product: true, modifiers: true },
-        orderBy: { createdAt: "asc" },
+      Order: {
+        include: {
+          table: true,
+          items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+        },
       },
     },
   });
 
-  return orders.map((o) => ({
-    id: o.id,
-    status: o.kitchenStatus,
-    createdAt: o.createdAt.toISOString(),
-    order: {
-      id: o.id,
-      orderNumber: o.orderNumber,
-      orderType: o.orderType,
-      table: o.table ? { name: o.table.name } : null,
-      items: o.items.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-        product: { name: item.product?.name ?? item.productId },
-        modifiers: item.modifiers.map((m) => ({
-          nameSnapshot: m.nameSnapshot,
-          priceDelta: m.priceSnapshot.toNumber(),
-        })),
-      })),
-    },
+  return tickets.map((t) => ({
+    id: t.id,
+    status: t.status,
+    createdAt: t.createdAt.toISOString(),
+    order: t.Order
+      ? {
+          id: t.Order.id,
+          orderNumber: t.Order.orderNumber,
+          orderType: t.Order.orderType,
+          notes: t.Order.notes,
+          table: t.Order.table ? { name: t.Order.table.name } : null,
+          items: t.Order.items.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            product: { name: item.product?.name ?? item.productId },
+            modifiers: item.modifiers.map((m) => ({
+              nameSnapshot: m.nameSnapshot,
+              priceDelta: m.priceDelta.toNumber(),
+            })),
+          })),
+        }
+      : null,
   }));
 }
 
@@ -46,43 +49,61 @@ export async function updateTicketStatus(
   ticketId: string,
   status: string
 ) {
-  const order = await prisma.order.findFirst({
+  const ticket = await prisma.kitchenTicket.findFirst({
     where: { id: ticketId, restaurantId },
   });
 
-  if (!order) throw new Error("Ticket not found");
+  if (!ticket) throw new Error("Ticket not found");
 
-  const updated = await prisma.order.update({
+  const updated = await prisma.kitchenTicket.update({
     where: { id: ticketId },
-    data: { kitchenStatus: status as KitchenStatus },
+    data: { status: status as KitchenStatus },
     include: {
-      table: true,
-      items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+      Order: {
+        include: {
+          table: true,
+          items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+        },
+      },
     },
-  });
-
-  await prisma.orderChangeLog.create({
-    data: { orderId: ticketId, userId, action: "KITCHEN_STATUS", payload: { status } as any },
   });
 
   return {
     id: updated.id,
-    status: updated.kitchenStatus,
+    status: updated.status,
     createdAt: updated.createdAt.toISOString(),
-    order: {
-      id: updated.id,
-      orderNumber: updated.orderNumber,
-      orderType: updated.orderType,
-      table: updated.table ? { name: updated.table.name } : null,
-      items: updated.items.map((item) => ({
-        id: item.id,
-        quantity: item.quantity,
-        product: { name: item.product?.name ?? item.productId },
-        modifiers: item.modifiers.map((m) => ({
-          nameSnapshot: m.nameSnapshot,
-          priceDelta: m.priceSnapshot.toNumber(),
-        })),
-      })),
-    },
+    order: updated.Order
+      ? {
+          id: updated.Order.id,
+          orderNumber: updated.Order.orderNumber,
+          orderType: updated.Order.orderType,
+          notes: updated.Order.notes,
+          table: updated.Order.table ? { name: updated.Order.table.name } : null,
+          items: updated.Order.items.map((item) => ({
+            id: item.id,
+            quantity: item.quantity,
+            product: { name: item.product?.name ?? item.productId },
+            modifiers: item.modifiers.map((m) => ({
+              nameSnapshot: m.nameSnapshot,
+              priceDelta: m.priceDelta.toNumber(),
+            })),
+          })),
+        }
+      : null,
   };
+}
+
+export async function createKitchenTicketForOrder(restaurantId: string, orderId: string) {
+  const existing = await prisma.kitchenTicket.findUnique({ where: { orderId } });
+  if (existing) return existing;
+
+  return prisma.kitchenTicket.create({
+    data: {
+      id: orderId,
+      restaurantId,
+      orderId,
+      status: KitchenStatus.PENDING,
+      updatedAt: new Date(),
+    },
+  });
 }

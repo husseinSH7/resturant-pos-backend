@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "ignoreDeprecations": "6.0",
-    "rootDir": ".",
+    "rootDir": "src",
 
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -25,5 +25,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "include": ["src", "prisma"]
+  "include": ["src"]
 }

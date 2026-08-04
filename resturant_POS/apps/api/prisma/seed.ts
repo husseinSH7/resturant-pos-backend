@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { PrismaClient, UserRole } from "@prisma/client";
+import { PrismaClient, UserRole, TableStatus, OrderStatus, OrderType, PaymentMethod, KitchenStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const connectionString = process.env.DATABASE_URL;
@@ -12,7 +12,6 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // ─── Restaurant ────────────────────────────────────────────────
   const restaurant = await prisma.restaurant.upsert({
     where: { slug: "demo-restaurant" },
     update: {
@@ -30,7 +29,6 @@ async function main() {
     },
   });
 
-  // ─── Users ─────────────────────────────────────────────────────
   const owner = await prisma.user.upsert({
     where: { email: "owner@demo.com" },
     update: { fullName: "Demo Owner", pin: "1111", role: UserRole.OWNER, restaurantId: restaurant.id, isActive: true },
@@ -55,7 +53,6 @@ async function main() {
     create: { fullName: "Demo Kitchen", pin: "3333", email: "kitchen@demo.com", role: UserRole.KITCHEN, restaurantId: restaurant.id, isActive: true },
   });
 
-  // ─── Categories ────────────────────────────────────────────────
   const burgers = await prisma.category.upsert({
     where: { restaurantId_name: { restaurantId: restaurant.id, name: "Burgers" } },
     update: { sortOrder: 1, isActive: true },
@@ -74,7 +71,6 @@ async function main() {
     create: { restaurantId: restaurant.id, name: "Sides", sortOrder: 3, isActive: true },
   });
 
-  // ─── Products ──────────────────────────────────────────────────
   const classicBurger = await prisma.product.upsert({
     where: { restaurantId_name: { restaurantId: restaurant.id, name: "Classic Burger" } },
     update: { categoryId: burgers.id, description: "Beef patty, lettuce, tomato, onion", price: "8.50", sku: "BURG-001", isActive: true },
@@ -105,179 +101,88 @@ async function main() {
     create: { restaurantId: restaurant.id, categoryId: drinks.id, name: "Water", description: "Mineral water", price: "1.00", sku: "DRNK-002", isActive: true },
   });
 
-  // ─── Modifier Groups & Options (delete+recreate keeps this idempotent) ──
-  await prisma.modifierGroup.deleteMany({ where: { productId: { in: [classicBurger.id, cheeseBurger.id] } } });
+  await prisma.modifierGroup.deleteMany({ where: { restaurantId: restaurant.id } });
 
-  const extrasClassic = await prisma.modifierGroup.create({
+  const extrasGroup = await prisma.modifierGroup.create({
     data: {
-      productId: classicBurger.id,
+      restaurantId: restaurant.id,
       name: "Extras",
-      required: false,
-      minChoices: 0,
-      maxChoices: 3,
+      isRequired: false,
+      minSelect: 0,
+      maxSelect: 3,
       sortOrder: 1,
       options: {
         create: [
-          { name: "Extra Cheese", price: "1.00" },
-          { name: "Extra Patty", price: "2.50" },
-          { name: "Bacon", price: "1.50" },
+          { name: "Extra Cheese", priceDelta: "1.00" },
+          { name: "Extra Patty", priceDelta: "2.50" },
+          { name: "Bacon", priceDelta: "1.50" },
         ],
       },
     },
     include: { options: true },
   });
 
-  await prisma.modifierGroup.create({
+  const sizeGroup = await prisma.modifierGroup.create({
     data: {
-      productId: cheeseBurger.id,
-      name: "Extras",
-      required: false,
-      minChoices: 0,
-      maxChoices: 3,
-      sortOrder: 1,
-      options: {
-        create: [
-          { name: "Extra Cheese", price: "1.00" },
-          { name: "Extra Patty", price: "2.50" },
-          { name: "Bacon", price: "1.50" },
-        ],
-      },
-    },
-  });
-
-  await prisma.modifierGroup.deleteMany({ where: { productId: cola.id } });
-
-  const sizeCola = await prisma.modifierGroup.create({
-    data: {
-      productId: cola.id,
+      restaurantId: restaurant.id,
       name: "Size",
-      required: true,
-      minChoices: 1,
-      maxChoices: 1,
+      isRequired: true,
+      minSelect: 1,
+      maxSelect: 1,
       sortOrder: 1,
       options: {
         create: [
-          { name: "Regular", price: "0.00" },
-          { name: "Large", price: "0.75" },
+          { name: "Regular", priceDelta: "0.00" },
+          { name: "Large", priceDelta: "0.75" },
         ],
       },
     },
     include: { options: true },
   });
 
-  const extraCheeseOption = extrasClassic.options.find((o) => o.name === "Extra Cheese")!;
-  const largeColaOption = sizeCola.options.find((o) => o.name === "Large")!;
-
-  // ─── Ingredients ───────────────────────────────────────────────
-  const ingredientData = [
-    { name: "Beef Patty", sku: "ING-001", unit: "pcs", costPerUnit: "1.50" },
-    { name: "Burger Bun", sku: "ING-002", unit: "pcs", costPerUnit: "0.40" },
-    { name: "Cheddar Cheese", sku: "ING-003", unit: "kg", costPerUnit: "8.00" },
-    { name: "Lettuce", sku: "ING-004", unit: "kg", costPerUnit: "2.00" },
-    { name: "Tomato", sku: "ING-005", unit: "kg", costPerUnit: "1.80" },
-    { name: "Onion", sku: "ING-006", unit: "kg", costPerUnit: "1.20" },
-    { name: "Potato", sku: "ING-007", unit: "kg", costPerUnit: "1.00" },
-    { name: "Salt", sku: "ING-008", unit: "kg", costPerUnit: "0.50" },
-  ];
-
-  const ingredients: Record<string, Awaited<ReturnType<typeof prisma.ingredient.upsert>>> = {};
-
-  for (const data of ingredientData) {
-    ingredients[data.name] = await prisma.ingredient.upsert({
-      where: { restaurantId_name: { restaurantId: restaurant.id, name: data.name } },
-      update: { unit: data.unit, costPerUnit: data.costPerUnit, sku: data.sku, isActive: true },
-      create: { restaurantId: restaurant.id, ...data, isActive: true },
-    });
-
-    await prisma.inventory.upsert({
-      where: { restaurantId_ingredientId: { restaurantId: restaurant.id, ingredientId: ingredients[data.name].id } },
-      update: { quantity: "50.00", minStockLevel: "10.00", lastRestockedAt: new Date() },
-      create: {
-        restaurantId: restaurant.id,
-        ingredientId: ingredients[data.name].id,
-        quantity: "50.00",
-        minStockLevel: "10.00",
-        lastRestockedAt: new Date(),
-      },
-    });
-  }
-
-  // ─── Recipes ───────────────────────────────────────────────────
-  const classicBurgerRecipe = await prisma.recipe.upsert({
-    where: { restaurantId_productId: { restaurantId: restaurant.id, productId: classicBurger.id } },
-    update: { name: "Classic Burger Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 8, isActive: true },
-    create: { restaurantId: restaurant.id, productId: classicBurger.id, name: "Classic Burger Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 8, isActive: true },
-  });
-
-  await prisma.recipeItem.deleteMany({ where: { recipeId: classicBurgerRecipe.id } });
-  await prisma.recipeItem.createMany({
+  await prisma.productModifierGroup.createMany({
     data: [
-      { recipeId: classicBurgerRecipe.id, ingredientId: ingredients["Beef Patty"].id, quantity: "1" },
-      { recipeId: classicBurgerRecipe.id, ingredientId: ingredients["Burger Bun"].id, quantity: "1" },
-      { recipeId: classicBurgerRecipe.id, ingredientId: ingredients["Lettuce"].id, quantity: "0.05" },
-      { recipeId: classicBurgerRecipe.id, ingredientId: ingredients["Tomato"].id, quantity: "0.05" },
-      { recipeId: classicBurgerRecipe.id, ingredientId: ingredients["Onion"].id, quantity: "0.03" },
+      { id: crypto.randomUUID(), productId: classicBurger.id, modifierGroupId: extrasGroup.id, sortOrder: 1 },
+      { id: crypto.randomUUID(), productId: cheeseBurger.id, modifierGroupId: extrasGroup.id, sortOrder: 1 },
+      { id: crypto.randomUUID(), productId: cola.id, modifierGroupId: sizeGroup.id, sortOrder: 1 },
     ],
   });
 
-  const cheeseBurgerRecipe = await prisma.recipe.upsert({
-    where: { restaurantId_productId: { restaurantId: restaurant.id, productId: cheeseBurger.id } },
-    update: { name: "Cheese Burger Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 9, isActive: true },
-    create: { restaurantId: restaurant.id, productId: cheeseBurger.id, name: "Cheese Burger Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 9, isActive: true },
+  const extraCheeseOption = extrasGroup.options.find((o) => o.name === "Extra Cheese")!;
+  const largeColaOption = sizeGroup.options.find((o) => o.name === "Large")!;
+
+  const tableArea = await prisma.tableArea.upsert({
+    where: { restaurantId_name: { restaurantId: restaurant.id, name: "Main Hall" } },
+    update: {},
+    create: { id: crypto.randomUUID(), restaurantId: restaurant.id, name: "Main Hall", updatedAt: new Date() },
   });
 
-  await prisma.recipeItem.deleteMany({ where: { recipeId: cheeseBurgerRecipe.id } });
-  await prisma.recipeItem.createMany({
-    data: [
-      { recipeId: cheeseBurgerRecipe.id, ingredientId: ingredients["Beef Patty"].id, quantity: "1" },
-      { recipeId: cheeseBurgerRecipe.id, ingredientId: ingredients["Burger Bun"].id, quantity: "1" },
-      { recipeId: cheeseBurgerRecipe.id, ingredientId: ingredients["Cheddar Cheese"].id, quantity: "0.03" },
-    ],
-  });
-
-  const friesRecipe = await prisma.recipe.upsert({
-    where: { restaurantId_productId: { restaurantId: restaurant.id, productId: fries.id } },
-    update: { name: "Fries Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 5, isActive: true },
-    create: { restaurantId: restaurant.id, productId: fries.id, name: "Fries Recipe", yieldQuantity: "1", yieldUnit: "serving", preparationTime: 5, isActive: true },
-  });
-
-  await prisma.recipeItem.deleteMany({ where: { recipeId: friesRecipe.id } });
-  await prisma.recipeItem.createMany({
-    data: [
-      { recipeId: friesRecipe.id, ingredientId: ingredients["Potato"].id, quantity: "0.2" },
-      { recipeId: friesRecipe.id, ingredientId: ingredients["Salt"].id, quantity: "0.01" },
-    ],
-  });
-
-  // ─── Tables ────────────────────────────────────────────────────
   const table1 = await prisma.table.upsert({
     where: { restaurantId_name: { restaurantId: restaurant.id, name: "1" } },
     update: {},
-    create: { restaurantId: restaurant.id, name: "1", seats: 4, area: "Main Hall", shape: "circle", status: "AVAILABLE" },
+    create: { restaurantId: restaurant.id, name: "1", seats: 4, areaId: tableArea.id, shape: "ROUND", status: TableStatus.AVAILABLE },
   });
 
   const table2 = await prisma.table.upsert({
     where: { restaurantId_name: { restaurantId: restaurant.id, name: "2" } },
     update: {},
-    create: { restaurantId: restaurant.id, name: "2", seats: 2, area: "Main Hall", shape: "square", status: "AVAILABLE" },
+    create: { restaurantId: restaurant.id, name: "2", seats: 2, areaId: tableArea.id, shape: "SQUARE", status: TableStatus.AVAILABLE },
   });
 
-  // ─── Customer ──────────────────────────────────────────────────
   const customer = await prisma.customer.upsert({
     where: { id: "demo-customer-john-doe" },
     update: {},
     create: {
       id: "demo-customer-john-doe",
       restaurantId: restaurant.id,
-      name: "John Doe",
+      fullName: "John Doe",
       phone: "+96171234567",
       email: "john.doe@example.com",
-      loyaltyPoints: 25,
+      points: 25,
       notes: "Regular customer, prefers window seating",
     },
   });
 
-  // ─── Shift ─────────────────────────────────────────────────────
   const existingShift = await prisma.shift.findFirst({ where: { restaurantId: restaurant.id, userId: cashier.id, status: "OPEN" } });
   if (!existingShift) {
     await prisma.shift.create({
@@ -285,24 +190,21 @@ async function main() {
     });
   }
 
-  // ─── Orders (only created once — skipped on re-seed if they already exist) ──
   const order1Exists = await prisma.order.findUnique({ where: { restaurantId_orderNumber: { restaurantId: restaurant.id, orderNumber: 1001 } } });
   if (!order1Exists) {
-    await prisma.order.create({
+    const order1 = await prisma.order.create({
       data: {
         restaurantId: restaurant.id,
         userId: cashier.id,
         customerId: customer.id,
         tableId: table1.id,
         orderNumber: 1001,
-        orderType: "DINE_IN",
-        status: "PAID",
-        kitchenStatus: "COMPLETED",
-        paymentMethod: "CARD",
+        orderType: OrderType.DINE_IN,
+        status: OrderStatus.PAID,
+        paymentMethod: PaymentMethod.CARD,
         subtotal: "35.25",
         taxAmount: "3.88",
         totalAmount: "39.13",
-        tipAmount: "4.00",
         notes: "Dine-in order, table 1",
         items: {
           create: [
@@ -311,13 +213,9 @@ async function main() {
               quantity: 2,
               unitPrice: "8.50",
               totalPrice: "18.00",
-              course: "Main",
-              sequence: 1,
-              preparedAt: new Date(),
-              servedAt: new Date(),
               modifiers: {
                 create: [
-                  { modifierOptionId: extraCheeseOption.id, nameSnapshot: "Extra Cheese", priceSnapshot: "1.00", quantity: 1, totalPrice: "1.00" },
+                  { modifierOptionId: extraCheeseOption.id, nameSnapshot: "Extra Cheese", priceDelta: "1.00" },
                 ],
               },
             },
@@ -326,117 +224,58 @@ async function main() {
               quantity: 1,
               unitPrice: "9.50",
               totalPrice: "9.50",
-              course: "Main",
-              sequence: 1,
-              preparedAt: new Date(),
-              servedAt: new Date(),
             },
             {
               productId: fries.id,
               quantity: 1,
               unitPrice: "3.00",
               totalPrice: "3.00",
-              course: "Main",
-              sequence: 1,
-              preparedAt: new Date(),
-              servedAt: new Date(),
             },
             {
               productId: cola.id,
               quantity: 2,
               unitPrice: "2.00",
               totalPrice: "4.75",
-              course: "Beverage",
-              sequence: 1,
-              preparedAt: new Date(),
-              servedAt: new Date(),
               modifiers: {
                 create: [
-                  { modifierOptionId: largeColaOption.id, nameSnapshot: "Large", priceSnapshot: "0.75", quantity: 1, totalPrice: "0.75" },
+                  { modifierOptionId: largeColaOption.id, nameSnapshot: "Large", priceDelta: "0.75" },
                 ],
               },
             },
           ],
         },
-        changeLogs: {
-          create: [
-            { userId: cashier.id, action: "ORDER_CREATED", payload: { status: "OPEN" } },
-            { userId: cashier.id, action: "ORDER_PAID", payload: { status: "PAID", paymentMethod: "CARD" } },
-          ],
-        },
-        tipDistributions: {
-          create: [
-            { userId: cashier.id, amount: "2.40", percentage: "60.00" },
-            { userId: kitchenUser.id, amount: "1.60", percentage: "40.00" },
-          ],
-        },
       },
+      include: { items: true },
+    });
+
+    await prisma.kitchenTicket.create({
+      data: { id: order1.id, restaurantId: restaurant.id, orderId: order1.id, status: KitchenStatus.READY, updatedAt: new Date() },
     });
   }
 
   const order2Exists = await prisma.order.findUnique({ where: { restaurantId_orderNumber: { restaurantId: restaurant.id, orderNumber: 1002 } } });
   if (!order2Exists) {
-    await prisma.order.create({
+    const order2 = await prisma.order.create({
       data: {
         restaurantId: restaurant.id,
         userId: cashier.id,
         orderNumber: 1002,
-        orderType: "TAKEOUT",
-        status: "VOIDED",
-        kitchenStatus: "PENDING",
+        orderType: OrderType.TAKEOUT,
+        status: OrderStatus.VOIDED,
         subtotal: "3.00",
         taxAmount: "0.33",
         totalAmount: "3.33",
         notes: "Customer cancelled before payment",
         items: {
           create: [
-            { productId: fries.id, quantity: 1, unitPrice: "3.00", totalPrice: "3.00", course: "Main", sequence: 1 },
-          ],
-        },
-        changeLogs: {
-          create: [
-            { userId: cashier.id, action: "ORDER_CREATED", payload: { status: "OPEN" } },
-            { userId: manager.id, action: "ORDER_VOIDED", payload: { reason: "Customer cancelled" } },
+            { productId: fries.id, quantity: 1, unitPrice: "3.00", totalPrice: "3.00" },
           ],
         },
       },
     });
-  }
 
-  const order3Exists = await prisma.order.findUnique({ where: { restaurantId_orderNumber: { restaurantId: restaurant.id, orderNumber: 1003 } } });
-  if (!order3Exists) {
-    await prisma.order.create({
-      data: {
-        restaurantId: restaurant.id,
-        userId: cashier.id,
-        tableId: table2.id,
-        orderNumber: 1003,
-        orderType: "DINE_IN",
-        status: "REFUNDED",
-        kitchenStatus: "COMPLETED",
-        paymentMethod: "CASH",
-        amountTendered: "20.00",
-        changeDue: "9.45",
-        subtotal: "9.50",
-        taxAmount: "1.05",
-        totalAmount: "10.55",
-        notes: "Refunded due to customer complaint",
-        items: {
-          create: [
-            { productId: cheeseBurger.id, quantity: 1, unitPrice: "9.50", totalPrice: "9.50", course: "Main", sequence: 1, preparedAt: new Date(), servedAt: new Date() },
-          ],
-        },
-        refunds: {
-          create: [{ amount: "10.55", reason: "Customer complaint", paymentMethod: "CASH" }],
-        },
-        changeLogs: {
-          create: [
-            { userId: cashier.id, action: "ORDER_CREATED", payload: { status: "OPEN" } },
-            { userId: cashier.id, action: "ORDER_PAID", payload: { status: "PAID", paymentMethod: "CASH" } },
-            { userId: manager.id, action: "ORDER_REFUNDED", payload: { reason: "Customer complaint", amount: "10.55" } },
-          ],
-        },
-      },
+    await prisma.kitchenTicket.create({
+      data: { id: order2.id, restaurantId: restaurant.id, orderId: order2.id, status: KitchenStatus.PENDING, updatedAt: new Date() },
     });
   }
 

@@ -7,18 +7,25 @@ export async function getCustomers(restaurantId: string) {
     orderBy: { createdAt: "desc" },
   });
 
-  return customers.map((c) => ({
-    id: c.id,
-    fullName: c.name,
-    name: c.name,
-    phone: c.phone,
-    email: c.email,
-    points: c.loyaltyPoints,
-    loyaltyPoints: c.loyaltyPoints,
-    totalSpent: 0,
-    visitCount: 0,
-    notes: c.notes,
-  }));
+  const enriched = await Promise.all(
+    customers.map(async (c) => {
+      const stats = await getCustomerStats(restaurantId, c.id);
+      return {
+        id: c.id,
+        fullName: c.fullName,
+        name: c.fullName,
+        phone: c.phone,
+        email: c.email,
+        points: c.points,
+        loyaltyPoints: c.points,
+        totalSpent: stats.totalSpent,
+        visitCount: stats.visitCount,
+        notes: c.notes,
+      };
+    })
+  );
+
+  return enriched;
 }
 
 export async function createCustomer(
@@ -28,23 +35,25 @@ export async function createCustomer(
   const customer = await prisma.customer.create({
     data: {
       restaurantId,
-      name: data.fullName,
+      fullName: data.fullName,
       phone: data.phone ?? null,
       email: data.email ?? null,
       notes: data.notes ?? null,
     },
   });
 
+  const stats = await getCustomerStats(restaurantId, customer.id);
+
   return {
     id: customer.id,
-    fullName: customer.name,
-    name: customer.name,
+    fullName: customer.fullName,
+    name: customer.fullName,
     phone: customer.phone,
     email: customer.email,
-    points: customer.loyaltyPoints,
-    loyaltyPoints: customer.loyaltyPoints,
-    totalSpent: 0,
-    visitCount: 0,
+    points: customer.points,
+    loyaltyPoints: customer.points,
+    totalSpent: stats.totalSpent,
+    visitCount: stats.visitCount,
     notes: customer.notes,
   };
 }
