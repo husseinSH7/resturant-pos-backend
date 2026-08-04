@@ -21,12 +21,29 @@ interface LowStockAlert {
   shortage: number;
 }
 
+interface Recipe {
+  id: string;
+  name: string;
+  productId: string;
+  totalCost: number;
+  items: Array<{
+    id: string;
+    ingredientId: string;
+    ingredientName: string;
+    quantity: number;
+    unit: string;
+    cost: number;
+  }>;
+}
+
 export default function Inventory() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showStockModal, setShowStockModal] = useState(false);
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [stockAdjustment, setStockAdjustment] = useState('');
   const [isRestock, setIsRestock] = useState(false);
@@ -38,6 +55,11 @@ export default function Inventory() {
     minStockLevel: '',
     initialStock: '',
   });
+  const [newRecipe, setNewRecipe] = useState({
+    name: '',
+    productId: '',
+    items: [] as Array<{ ingredientId: string; quantity: string }>,
+  });
 
   useEffect(() => {
     loadData();
@@ -45,58 +67,59 @@ export default function Inventory() {
 
   const loadData = async () => {
     try {
-      // Mock data - replace with actual API calls
-      setIngredients([
-        {
-          id: '1',
-          name: 'Flour',
-          sku: 'FLO001',
-          unit: 'kg',
-          costPerUnit: 0.50,
-          currentStock: 45,
-          minStockLevel: 50,
-          isLowStock: true,
-        },
-        {
-          id: '2',
-          name: 'Sugar',
-          sku: 'SUG002',
-          unit: 'kg',
-          costPerUnit: 0.75,
-          currentStock: 80,
-          minStockLevel: 30,
-          isLowStock: false,
-        },
-        {
-          id: '3',
-          name: 'Olive Oil',
-          sku: 'OIL003',
-          unit: 'L',
-          costPerUnit: 8.50,
-          currentStock: 12,
-          minStockLevel: 15,
-          isLowStock: true,
-        },
-      ]);
+      const API_BASE = 'http://localhost:4000';
       
-      setLowStockAlerts([
-        {
-          ingredientId: '1',
-          ingredientName: 'Flour',
-          currentStock: 45,
-          minStockLevel: 50,
-          unit: 'kg',
-          shortage: 5,
+      // Load ingredients from API
+      const ingredientsRes = await fetch(`${API_BASE}/inventory/ingredients`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        {
-          ingredientId: '3',
-          ingredientName: 'Olive Oil',
-          currentStock: 12,
-          minStockLevel: 15,
-          unit: 'L',
-          shortage: 3,
+      });
+      
+      if (ingredientsRes.ok) {
+        const ingredientsData = await ingredientsRes.json();
+        setIngredients(ingredientsData.map((ing: any) => ({
+          id: ing.id,
+          name: ing.name,
+          sku: null,
+          unit: ing.unit,
+          costPerUnit: ing.costPerUnit,
+          currentStock: ing.currentStock,
+          minStockLevel: ing.minStock,
+          isLowStock: ing.currentStock <= ing.minStock,
+        })));
+      }
+      
+      // Load low stock alerts from API
+      const alertsRes = await fetch(`${API_BASE}/inventory/low-stock`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-      ]);
+      });
+      
+      if (alertsRes.ok) {
+        const alertsData = await alertsRes.json();
+        setLowStockAlerts(alertsData.map((alert: any) => ({
+          ingredientId: alert.id,
+          ingredientName: alert.name,
+          currentStock: alert.currentStock,
+          minStockLevel: alert.minStock,
+          unit: alert.unit,
+          shortage: alert.minStock - alert.currentStock,
+        })));
+      }
+      
+      // Load recipes from API
+      const recipesRes = await fetch(`${API_BASE}/inventory/recipes`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      
+      if (recipesRes.ok) {
+        const recipesData = await recipesRes.json();
+        setRecipes(recipesData);
+      }
     } catch (error) {
       console.error('Failed to load inventory:', error);
     } finally {
@@ -106,33 +129,74 @@ export default function Inventory() {
 
   const handleAddIngredient = async () => {
     try {
-      // API call to add ingredient
-      setShowAddModal(false);
-      setNewIngredient({
-        name: '',
-        sku: '',
-        unit: 'kg',
-        costPerUnit: '',
-        minStockLevel: '',
-        initialStock: '',
+      const API_BASE = 'http://localhost:4000';
+      const response = await fetch(`${API_BASE}/inventory/ingredients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          name: newIngredient.name,
+          unit: newIngredient.unit,
+          currentStock: parseFloat(newIngredient.initialStock) || 0,
+          minStock: parseFloat(newIngredient.minStockLevel) || 0,
+          costPerUnit: parseFloat(newIngredient.costPerUnit) || 0,
+        }),
       });
-      loadData();
+      
+      if (response.ok) {
+        setShowAddModal(false);
+        setNewIngredient({
+          name: '',
+          sku: '',
+          unit: 'kg',
+          costPerUnit: '',
+          minStockLevel: '',
+          initialStock: '',
+        });
+        loadData();
+      } else {
+        throw new Error('Failed to add ingredient');
+      }
     } catch (error) {
       console.error('Failed to add ingredient:', error);
+      alert('Failed to add ingredient. Please try again.');
     }
   };
 
   const handleAdjustStock = async () => {
     if (!selectedIngredient) return;
     try {
-      // API call to adjust stock
-      setShowStockModal(false);
-      setStockAdjustment('');
-      setIsRestock(false);
-      setSelectedIngredient(null);
-      loadData();
+      const API_BASE = 'http://localhost:4000';
+      const adjustment = isRestock 
+        ? parseFloat(stockAdjustment) 
+        : -parseFloat(stockAdjustment);
+      
+      const response = await fetch(`${API_BASE}/inventory/ingredients/${selectedIngredient.id}/adjust`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          adjustment,
+          reason: isRestock ? 'Restock' : 'Usage',
+        }),
+      });
+      
+      if (response.ok) {
+        setShowStockModal(false);
+        setStockAdjustment('');
+        setIsRestock(false);
+        setSelectedIngredient(null);
+        loadData();
+      } else {
+        throw new Error('Failed to adjust stock');
+      }
     } catch (error) {
       console.error('Failed to adjust stock:', error);
+      alert('Failed to adjust stock. Please try again.');
     }
   };
 
@@ -153,13 +217,22 @@ export default function Inventory() {
             <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
             <p className="text-gray-600 mt-1">Track ingredients, stock levels, and costs</p>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
-          >
-            <Plus className="w-5 h-5" />
-            Add Ingredient
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowRecipeModal(true)}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+            >
+              <Plus className="w-5 h-5" />
+              Add Recipe
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+            >
+              <Plus className="w-5 h-5" />
+              Add Ingredient
+            </button>
+          </div>
         </div>
 
         {/* Low Stock Alerts */}
@@ -282,6 +355,58 @@ export default function Inventory() {
                     >
                       Adjust Stock
                     </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Recipes Section */}
+        <div className="bg-white rounded-lg shadow overflow-hidden mt-8">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Recipes ({recipes.length})
+            </h2>
+          </div>
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Recipe Name
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Product ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Cost
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ingredients
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {recipes.map((recipe) => (
+                <tr key={recipe.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="font-medium text-gray-900">{recipe.name}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                    {recipe.productId}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
+                    ${recipe.totalCost.toFixed(2)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-600">
+                      {recipe.items.map((item, idx) => (
+                        <div key={item.id}>
+                          {item.quantity} {item.unit} {item.ingredientName} (${item.cost.toFixed(2)})
+                        </div>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -433,6 +558,135 @@ export default function Inventory() {
                   className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
                 >
                   Adjust Stock
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Recipe Modal */}
+        {showRecipeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-semibold mb-4">Add New Recipe</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipe Name</label>
+                  <input
+                    type="text"
+                    value={newRecipe.name}
+                    onChange={(e) => setNewRecipe({ ...newRecipe, name: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Recipe name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product ID</label>
+                  <input
+                    type="text"
+                    value={newRecipe.productId}
+                    onChange={(e) => setNewRecipe({ ...newRecipe, productId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Product ID"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ingredients</label>
+                  {newRecipe.items.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 mb-2">
+                      <select
+                        value={item.ingredientId}
+                        onChange={(e) => {
+                          const updatedItems = [...newRecipe.items];
+                          updatedItems[idx] = { ...item, ingredientId: e.target.value };
+                          setNewRecipe({ ...newRecipe, items: updatedItems });
+                        }}
+                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
+                      >
+                        <option value="">Select ingredient</option>
+                        {ingredients.map((ing) => (
+                          <option key={ing.id} value={ing.id}>
+                            {ing.name} ({ing.unit})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.quantity}
+                        onChange={(e) => {
+                          const updatedItems = [...newRecipe.items];
+                          updatedItems[idx] = { ...item, quantity: e.target.value };
+                          setNewRecipe({ ...newRecipe, items: updatedItems });
+                        }}
+                        className="w-24 border border-gray-300 rounded-lg px-3 py-2"
+                        placeholder="Qty"
+                      />
+                      <button
+                        onClick={() => {
+                          const updatedItems = newRecipe.items.filter((_, i) => i !== idx);
+                          setNewRecipe({ ...newRecipe, items: updatedItems });
+                        }}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setNewRecipe({ ...newRecipe, items: [...newRecipe.items, { ingredientId: '', quantity: '' }] })}
+                    className="text-blue-600 hover:text-blue-900 text-sm font-medium"
+                  >
+                    + Add Ingredient
+                  </button>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowRecipeModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const API_BASE = 'http://localhost:4000';
+                      const response = await fetch(`${API_BASE}/inventory/recipes`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        },
+                        body: JSON.stringify({
+                          name: newRecipe.name,
+                          productId: newRecipe.productId,
+                          items: newRecipe.items.map(item => ({
+                            ingredientId: item.ingredientId,
+                            quantity: parseFloat(item.quantity) || 0,
+                          })),
+                        }),
+                      });
+                      
+                      if (response.ok) {
+                        setShowRecipeModal(false);
+                        setNewRecipe({
+                          name: '',
+                          productId: '',
+                          items: [],
+                        });
+                        loadData();
+                      } else {
+                        throw new Error('Failed to create recipe');
+                      }
+                    } catch (error) {
+                      console.error('Failed to create recipe:', error);
+                      alert('Failed to create recipe. Please try again.');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                >
+                  Create Recipe
                 </button>
               </div>
             </div>

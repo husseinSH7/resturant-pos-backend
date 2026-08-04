@@ -27,6 +27,11 @@ model Restaurant {
   tables        Table[]
   TableArea     TableArea[]
   users         User[]
+  Ingredient    Ingredient[]
+  Recipe        Recipe[]
+  StockAdjustment StockAdjustment[]
+  GiftCard      GiftCard[]
+  MarketingCampaign MarketingCampaign[]
 }
 
 model User {
@@ -171,6 +176,7 @@ model Customer {
   updatedAt    DateTime   @updatedAt
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   orders       Order[]
+  GiftCard     GiftCard[]
 
   @@index([restaurantId])
   @@index([restaurantId, email])
@@ -311,15 +317,18 @@ model Payment {
   status            String        @default("COMPLETED")
   createdAt         DateTime      @default(now())
   updatedAt         DateTime
+  giftCardId        String?
   Order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   Restaurant        Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   User              User          @relation(fields: [userId], references: [id])
   Refund            Refund[]
+  GiftCard          GiftCard?     @relation(fields: [giftCardId], references: [id])
 
   @@index([orderId])
   @@index([restaurantId])
   @@index([status])
   @@index([userId])
+  @@index([giftCardId])
 }
 
 model ProductModifierGroup {
@@ -333,6 +342,115 @@ model ProductModifierGroup {
   @@unique([productId, modifierGroupId])
   @@index([modifierGroupId])
   @@index([productId])
+}
+
+model Ingredient {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  unit         String
+  currentStock Decimal  @default(0) @db.Decimal(10, 2)
+  minStock     Decimal  @default(0) @db.Decimal(10, 2)
+  costPerUnit  Decimal  @default(0) @db.Decimal(10, 2)
+  supplier     String?
+  lastRestocked DateTime?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  Restaurant   Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  RecipeItem   RecipeItem[]
+  StockAdjustment StockAdjustment[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+}
+
+model Recipe {
+  id           String   @id @default(uuid())
+  restaurantId String
+  name         String
+  productId    String
+  totalCost    Decimal  @default(0) @db.Decimal(10, 2)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  Restaurant   Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  items        RecipeItem[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@index([productId])
+}
+
+model RecipeItem {
+  id           String   @id @default(uuid())
+  recipeId     String
+  ingredientId String
+  quantity     Decimal  @db.Decimal(10, 2)
+  cost         Decimal  @default(0) @db.Decimal(10, 2)
+  Recipe       Recipe      @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  Ingredient   Ingredient  @relation(fields: [ingredientId], references: [id])
+
+  @@unique([recipeId, ingredientId])
+  @@index([recipeId])
+  @@index([ingredientId])
+}
+
+model StockAdjustment {
+  id            String   @id @default(uuid())
+  restaurantId  String
+  ingredientId  String
+  adjustment    Decimal  @db.Decimal(10, 2)
+  previousStock Decimal  @db.Decimal(10, 2)
+  newStock      Decimal  @db.Decimal(10, 2)
+  reason        String
+  createdAt     DateTime @default(now())
+  Restaurant    Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  Ingredient    Ingredient  @relation(fields: [ingredientId], references: [id])
+
+  @@index([restaurantId])
+  @@index([ingredientId])
+  @@index([createdAt])
+}
+
+model GiftCard {
+  id            String   @id @default(uuid())
+  restaurantId  String
+  customerId    String?
+  cardNumber    String   @unique
+  balance       Decimal  @default(0) @db.Decimal(10, 2)
+  initialAmount Decimal  @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  expiresAt     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  Customer      Customer?  @relation(fields: [customerId], references: [id])
+  Payment       Payment[]
+
+  @@index([restaurantId])
+  @@index([cardNumber])
+  @@index([customerId])
+}
+
+model MarketingCampaign {
+  id             String   @id @default(uuid())
+  restaurantId   String
+  name           String
+  type           String
+  status         String   @default("ACTIVE")
+  startDate      DateTime
+  endDate        DateTime
+  targetAudience String
+  budget         Decimal  @default(0) @db.Decimal(10, 2)
+  message        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  Restaurant     Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([startDate])
 }
 
 model TableArea {
@@ -381,6 +499,7 @@ enum PaymentMethod {
   CASH
   CARD
   MIXED
+  GIFT_CARD
 }
 
 enum ShiftStatus {

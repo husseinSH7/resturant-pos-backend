@@ -7,6 +7,8 @@ import shiftRoutes from "../modules/shifts/shifts.routes.js";
 import customerRoutes from "../modules/customers/customers.routes.js";
 import kitchenRoutes from "../modules/kitchen/kitchen.routes.js";
 import inventoryRoutes from "../modules/inventory/inventory.routes.js";
+import giftCardRoutes from "../modules/giftcards/giftcards.routes.js";
+import marketingRoutes from "../modules/marketing/marketing.routes.js";
 
 const router = Router();
 
@@ -18,5 +20,7 @@ router.use("/shifts", shiftRoutes);
 router.use("/customers", customerRoutes);
 router.use("/kitchen", kitchenRoutes);
 router.use("/inventory", inventoryRoutes);
+router.use("/giftcards", giftCardRoutes);
+router.use("/marketing", marketingRoutes);
 
 export default router;

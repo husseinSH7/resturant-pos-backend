@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { auth } from "../../middleware/auth.js";
-import { create, list, get, addItems, pay, voidOrderController } from "./orders.controller.js";
+import { create, list, get, addItems, pay, voidOrderController, refundOrderController } from "./orders.controller.js";
 
 const router = Router();
 
@@ -10,5 +10,6 @@ router.get("/:id", auth, get);
 router.put("/:id/items", auth, addItems);
 router.post("/:id/pay", auth, pay);
 router.post("/:id/void", auth, voidOrderController);
+router.post("/:id/refund", auth, refundOrderController);
 
 export default router;

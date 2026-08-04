@@ -230,6 +230,7 @@ export async function payOrder(
 export async function voidOrder(restaurantId: string, userId: string, orderId: string, reason?: string) {
   const order = await prisma.order.findFirst({ where: { id: orderId, restaurantId } });
   if (!order) throw new Error("Order not found");
+  if (order.status === OrderStatus.VOIDED) throw new Error("Order already voided");
 
   const updated = await prisma.$transaction(async (tx) => {
     if (order.tableId) {
@@ -253,6 +254,70 @@ export async function voidOrder(restaurantId: string, userId: string, orderId: s
   });
 
   return mapOrder(updated);
+}
+
+export async function refundOrder(
+  restaurantId: string,
+  userId: string,
+  orderId: string,
+  data: {
+    amount: number;
+    reason: string;
+    paymentId?: string;
+  }
+) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, restaurantId },
+    include: { payments: true },
+  });
+
+  if (!order) throw new Error("Order not found");
+  if (order.status !== OrderStatus.PAID) throw new Error("Order must be paid to refund");
+
+  const payment = data.paymentId
+    ? order.payments.find((p) => p.id === data.paymentId)
+    : order.payments[0];
+
+  if (!payment) throw new Error("Payment not found");
+  if (data.amount > Number(payment.amount)) throw new Error("Refund amount exceeds payment amount");
+
+  const refund = await prisma.$transaction(async (tx) => {
+    const createdRefund = await tx.refund.create({
+      data: {
+        restaurantId,
+        userId,
+        paymentId: payment.id,
+        amount: new Prisma.Decimal(data.amount),
+        reason: data.reason,
+        reference: `REF-${Date.now()}`,
+      },
+    });
+
+    const totalRefunded = await tx.refund.aggregate({
+      where: { paymentId: payment.id },
+      _sum: { amount: true },
+    });
+
+    const refundTotal = Number(totalRefunded._sum.amount || 0);
+    if (refundTotal >= Number(payment.amount)) {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: "REFUNDED" },
+      });
+    }
+
+    return createdRefund;
+  });
+
+  return {
+    success: true,
+    refund: {
+      id: refund.id,
+      amount: Number(refund.amount),
+      reason: refund.reason,
+      reference: refund.reference,
+    },
+  };
 }
 
 async function nextOrderNumber(restaurantId: string) {

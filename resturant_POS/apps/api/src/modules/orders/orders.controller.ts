@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { createOrder, getOrders, getOrderById, addOrderItems, payOrder, voidOrder } from "./orders.service.js";
+import { createOrder, getOrders, getOrderById, addOrderItems, payOrder, voidOrder, refundOrder } from "./orders.service.js";
 
 export async function create(req: Request, res: Response) {
   try {
@@ -62,5 +62,19 @@ export async function voidOrderController(req: Request, res: Response) {
     res.json({ success: true, order });
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Void failed" });
+  }
+}
+
+export async function refundOrderController(req: Request, res: Response) {
+  try {
+    const id = req.params.id;
+    if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
+    const { amount, reason, paymentId } = req.body;
+    if (!amount || typeof amount !== "number") return res.status(400).json({ message: "Valid amount is required" });
+    if (!reason || typeof reason !== "string") return res.status(400).json({ message: "Reason is required" });
+    const result = await refundOrder(req.user!.restaurantId, req.user!.userId, id, { amount, reason, paymentId });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ message: error.message || "Refund failed" });
   }
 }

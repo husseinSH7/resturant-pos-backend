@@ -1,27 +1,278 @@
-export async function getIngredients(_restaurantId: string) {
-  return [];
+import { prisma } from "../../prisma.js";
+import { Prisma } from "@prisma/client";
+
+export async function getIngredients(restaurantId: string) {
+  const ingredients = await prisma.ingredient.findMany({
+    where: { restaurantId, isActive: true },
+    orderBy: { name: "asc" },
+  });
+
+  return ingredients.map(ing => ({
+    id: ing.id,
+    name: ing.name,
+    unit: ing.unit,
+    currentStock: Number(ing.currentStock),
+    minStock: Number(ing.minStock),
+    costPerUnit: Number(ing.costPerUnit),
+    supplier: ing.supplier,
+    lastRestocked: ing.lastRestocked,
+  }));
 }
 
-export async function createIngredient(_restaurantId: string, _data: unknown) {
-  throw new Error("Inventory is not enabled in this version");
+export async function createIngredient(restaurantId: string, data: {
+  name: string;
+  unit: string;
+  currentStock: number;
+  minStock: number;
+  costPerUnit: number;
+  supplier?: string;
+}) {
+  const ingredient = await prisma.ingredient.create({
+    data: {
+      id: crypto.randomUUID(),
+      restaurantId,
+      name: data.name,
+      unit: data.unit,
+      currentStock: new Prisma.Decimal(data.currentStock),
+      minStock: new Prisma.Decimal(data.minStock),
+      costPerUnit: new Prisma.Decimal(data.costPerUnit),
+      supplier: data.supplier || null,
+      lastRestocked: new Date(),
+    },
+  });
+
+  return {
+    id: ingredient.id,
+    name: ingredient.name,
+    unit: ingredient.unit,
+    currentStock: Number(ingredient.currentStock),
+    minStock: Number(ingredient.minStock),
+    costPerUnit: Number(ingredient.costPerUnit),
+    supplier: ingredient.supplier,
+    lastRestocked: ingredient.lastRestocked,
+  };
 }
 
-export async function updateIngredient(_restaurantId: string, _ingredientId: string, _data: unknown) {
-  throw new Error("Inventory is not enabled in this version");
+export async function updateIngredient(restaurantId: string, ingredientId: string, data: {
+  name?: string;
+  unit?: string;
+  currentStock?: number;
+  minStock?: number;
+  costPerUnit?: number;
+  supplier?: string;
+}) {
+  const ingredient = await prisma.ingredient.findFirst({
+    where: { id: ingredientId, restaurantId },
+  });
+
+  if (!ingredient) throw new Error("Ingredient not found");
+
+  const updated = await prisma.ingredient.update({
+    where: { id: ingredientId },
+    data: {
+      ...(data.name && { name: data.name }),
+      ...(data.unit && { unit: data.unit }),
+      ...(data.currentStock !== undefined && { currentStock: new Prisma.Decimal(data.currentStock) }),
+      ...(data.minStock !== undefined && { minStock: new Prisma.Decimal(data.minStock) }),
+      ...(data.costPerUnit !== undefined && { costPerUnit: new Prisma.Decimal(data.costPerUnit) }),
+      ...(data.supplier !== undefined && { supplier: data.supplier }),
+    },
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    unit: updated.unit,
+    currentStock: Number(updated.currentStock),
+    minStock: Number(updated.minStock),
+    costPerUnit: Number(updated.costPerUnit),
+    supplier: updated.supplier,
+    lastRestocked: updated.lastRestocked,
+  };
 }
 
-export async function adjustStock(_restaurantId: string, _ingredientId: string, _data: unknown) {
-  throw new Error("Inventory is not enabled in this version");
+export async function adjustStock(restaurantId: string, ingredientId: string, data: {
+  adjustment: number;
+  reason: string;
+}) {
+  const ingredient = await prisma.ingredient.findFirst({
+    where: { id: ingredientId, restaurantId },
+  });
+
+  if (!ingredient) throw new Error("Ingredient not found");
+
+  const newStock = Number(ingredient.currentStock) + data.adjustment;
+  if (newStock < 0) throw new Error("Insufficient stock for adjustment");
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedIng = await tx.ingredient.update({
+      where: { id: ingredientId },
+      data: {
+        currentStock: new Prisma.Decimal(newStock),
+        lastRestocked: new Date(),
+      },
+    });
+
+    await tx.stockAdjustment.create({
+      data: {
+        id: crypto.randomUUID(),
+        restaurantId,
+        ingredientId,
+        adjustment: new Prisma.Decimal(data.adjustment),
+        previousStock: ingredient.currentStock,
+        newStock: updatedIng.currentStock,
+        reason: data.reason,
+      },
+    });
+
+    return updatedIng;
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    unit: updated.unit,
+    currentStock: Number(updated.currentStock),
+    minStock: Number(updated.minStock),
+    costPerUnit: Number(updated.costPerUnit),
+    supplier: updated.supplier,
+    lastRestocked: updated.lastRestocked,
+  };
 }
 
-export async function getLowStockAlerts(_restaurantId: string) {
-  return [];
+export async function getLowStockAlerts(restaurantId: string) {
+  const ingredients = await prisma.ingredient.findMany({
+    where: {
+      restaurantId,
+      isActive: true,
+      currentStock: {
+        lte: prisma.ingredient.fields.minStock,
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return ingredients.map(ing => ({
+    id: ing.id,
+    name: ing.name,
+    currentStock: Number(ing.currentStock),
+    minStock: Number(ing.minStock),
+    unit: ing.unit,
+    percentage: Number(ing.currentStock) / Number(ing.minStock) * 100,
+  }));
 }
 
-export async function getRecipes(_restaurantId: string) {
-  return [];
+export async function getRecipes(restaurantId: string) {
+  const recipes = await prisma.recipe.findMany({
+    where: { restaurantId, isActive: true },
+    include: {
+      items: {
+        include: {
+          ingredient: true,
+        },
+      },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  return recipes.map(recipe => ({
+    id: recipe.id,
+    name: recipe.name,
+    productId: recipe.productId,
+    totalCost: Number(recipe.totalCost),
+    items: recipe.items.map(item => ({
+      id: item.id,
+      ingredientId: item.ingredientId,
+      ingredientName: item.ingredient.name,
+      quantity: Number(item.quantity),
+      unit: item.ingredient.unit,
+      cost: Number(item.cost),
+    })),
+  }));
 }
 
-export async function createRecipe(_restaurantId: string, _data: unknown) {
-  throw new Error("Inventory is not enabled in this version");
+export async function createRecipe(restaurantId: string, data: {
+  name: string;
+  productId: string;
+  items: Array<{
+    ingredientId: string;
+    quantity: number;
+  }>;
+}) {
+  const totalCost = await prisma.$transaction(async (tx) => {
+    let cost = new Prisma.Decimal(0);
+
+    for (const item of data.items) {
+      const ingredient = await tx.ingredient.findFirst({
+        where: { id: item.ingredientId, restaurantId },
+      });
+
+      if (!ingredient) throw new Error(`Ingredient ${item.ingredientId} not found`);
+
+      const itemCost = new Prisma.Decimal(item.quantity).mul(ingredient.costPerUnit);
+      cost = cost.add(itemCost);
+    }
+
+    return cost;
+  });
+
+  const recipe = await prisma.$transaction(async (tx) => {
+    const created = await tx.recipe.create({
+      data: {
+        id: crypto.randomUUID(),
+        restaurantId,
+        name: data.name,
+        productId: data.productId,
+        totalCost,
+      },
+    });
+
+    for (const item of data.items) {
+      const ingredient = await tx.ingredient.findFirst({
+        where: { id: item.ingredientId, restaurantId },
+      });
+
+      if (!ingredient) throw new Error(`Ingredient ${item.ingredientId} not found`);
+
+      const itemCost = new Prisma.Decimal(item.quantity).mul(ingredient.costPerUnit);
+
+      await tx.recipeItem.create({
+        data: {
+          id: crypto.randomUUID(),
+          recipeId: created.id,
+          ingredientId: item.ingredientId,
+          quantity: new Prisma.Decimal(item.quantity),
+          cost: itemCost,
+        },
+      });
+    }
+
+    return created;
+  });
+
+  const fullRecipe = await prisma.recipe.findFirst({
+    where: { id: recipe.id },
+    include: {
+      items: {
+        include: {
+          ingredient: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: fullRecipe!.id,
+    name: fullRecipe!.name,
+    productId: fullRecipe!.productId,
+    totalCost: Number(fullRecipe!.totalCost),
+    items: fullRecipe!.items.map(item => ({
+      id: item.id,
+      ingredientId: item.ingredientId,
+      ingredientName: item.ingredient.name,
+      quantity: Number(item.quantity),
+      unit: item.ingredient.unit,
+      cost: Number(item.cost),
+    })),
+  };
 }
