@@ -100,6 +100,9 @@ export async function createOrder(
 
   await createKitchenTicketForOrder(restaurantId, order.id);
 
+  // Broadcast new order to connected clients
+  broadcastToRestaurant(restaurantId, 'order-created', mapOrder(full!));
+
   return mapOrder(full!);
 }
 

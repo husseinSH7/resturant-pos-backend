@@ -10,6 +10,9 @@ import inventoryRoutes from "../modules/inventory/inventory.routes.js";
 import giftCardRoutes from "../modules/giftcards/giftcards.routes.js";
 import marketingRoutes from "../modules/marketing/marketing.routes.js";
 import reservationRoutes from "../modules/reservations/reservations.routes.js";
+import analyticsRoutes from "../modules/analytics/analytics.routes.js";
+import staffRoutes from "../modules/staff/staff.routes.js";
+import settingsRoutes from "../modules/settings/settings.routes.js";
 
 const router = Router();
 
@@ -24,5 +27,8 @@ router.use("/inventory", inventoryRoutes);
 router.use("/giftcards", giftCardRoutes);
 router.use("/marketing", marketingRoutes);
 router.use("/reservations", reservationRoutes);
+router.use("/analytics", analyticsRoutes);
+router.use("/staff", staffRoutes);
+router.use("/settings", settingsRoutes);
 
 export default router;
