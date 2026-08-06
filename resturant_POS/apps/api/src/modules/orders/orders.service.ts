@@ -1,6 +1,7 @@
 import { prisma } from "../../prisma.js";
 import { OrderStatus, TableStatus, OrderType, PaymentMethod, Prisma } from "@prisma/client";
 import { createKitchenTicketForOrder } from "../kitchen/kitchen.service.js";
+import { broadcastToRestaurant } from "../../websocket/index.js";
 
 type OrderInputItem = {
   productId: string;

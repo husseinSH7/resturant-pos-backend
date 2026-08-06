@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { getCustomers, createCustomer, addLoyaltyPoints, redeemLoyaltyPoints, getLoyaltyTier, getCustomerAnalytics } from "./customers.service.js";
+import { getCustomers, createCustomer, addLoyaltyPoints, redeemLoyaltyPoints, getLoyaltyTier as getLoyaltyTierService, getCustomerAnalytics } from "./customers.service.js";
 
 export async function list(req: Request, res: Response) {
   try {
@@ -49,7 +49,7 @@ export async function getLoyaltyTier(req: Request, res: Response) {
   try {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Customer ID is required" });
-    const tier = await getLoyaltyTier(req.user!.restaurantId, id);
+    const tier = await getLoyaltyTierService(req.user!.restaurantId, id);
     res.json(tier);
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to get loyalty tier" });
