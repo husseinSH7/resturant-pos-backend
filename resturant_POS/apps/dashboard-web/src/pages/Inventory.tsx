@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Package, AlertTriangle, TrendingDown } from 'lucide-react';
+import axios from 'axios';
 
 interface Ingredient {
   id: string;
@@ -67,59 +68,40 @@ export default function Inventory() {
 
   const loadData = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const headers = { 
+        Authorization: `Bearer ${token}`,
+        'X-Restaurant-ID': restaurantId || ''
+      };
       
       // Load ingredients from API
-      const ingredientsRes = await fetch(`${API_BASE}/inventory/ingredients`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (ingredientsRes.ok) {
-        const ingredientsData = await ingredientsRes.json();
-        setIngredients(ingredientsData.map((ing: any) => ({
-          id: ing.id,
-          name: ing.name,
-          sku: null,
-          unit: ing.unit,
-          costPerUnit: ing.costPerUnit,
-          currentStock: ing.currentStock,
-          minStockLevel: ing.minStock,
-          isLowStock: ing.currentStock <= ing.minStock,
-        })));
-      }
+      const ingredientsRes = await axios.get('http://localhost:4000/api/v1/inventory/ingredients', { headers });
+      setIngredients(ingredientsRes.data.map((ing: any) => ({
+        id: ing.id,
+        name: ing.name,
+        sku: null,
+        unit: ing.unit,
+        costPerUnit: ing.costPerUnit,
+        currentStock: ing.currentStock,
+        minStockLevel: ing.minStock,
+        isLowStock: ing.currentStock <= ing.minStock,
+      })));
       
       // Load low stock alerts from API
-      const alertsRes = await fetch(`${API_BASE}/inventory/low-stock`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (alertsRes.ok) {
-        const alertsData = await alertsRes.json();
-        setLowStockAlerts(alertsData.map((alert: any) => ({
-          ingredientId: alert.id,
-          ingredientName: alert.name,
-          currentStock: alert.currentStock,
-          minStockLevel: alert.minStock,
-          unit: alert.unit,
-          shortage: alert.minStock - alert.currentStock,
-        })));
-      }
+      const alertsRes = await axios.get('http://localhost:4000/api/v1/inventory/low-stock', { headers });
+      setLowStockAlerts(alertsRes.data.map((alert: any) => ({
+        ingredientId: alert.id,
+        ingredientName: alert.name,
+        currentStock: alert.currentStock,
+        minStockLevel: alert.minStock,
+        unit: alert.unit,
+        shortage: alert.minStock - alert.currentStock,
+      })));
       
       // Load recipes from API
-      const recipesRes = await fetch(`${API_BASE}/inventory/recipes`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (recipesRes.ok) {
-        const recipesData = await recipesRes.json();
-        setRecipes(recipesData);
-      }
+      const recipesRes = await axios.get('http://localhost:4000/api/v1/inventory/recipes', { headers });
+      setRecipes(recipesRes.data);
     } catch (error) {
       console.error('Failed to load inventory:', error);
     } finally {
@@ -129,36 +111,30 @@ export default function Inventory() {
 
   const handleAddIngredient = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const response = await fetch(`${API_BASE}/inventory/ingredients`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.post(
+        'http://localhost:4000/api/v1/inventory/ingredients',
+        {
           name: newIngredient.name,
           unit: newIngredient.unit,
           currentStock: parseFloat(newIngredient.initialStock) || 0,
           minStock: parseFloat(newIngredient.minStockLevel) || 0,
           costPerUnit: parseFloat(newIngredient.costPerUnit) || 0,
-        }),
-      });
+        },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
       
-      if (response.ok) {
-        setShowAddModal(false);
-        setNewIngredient({
-          name: '',
-          sku: '',
-          unit: 'kg',
-          costPerUnit: '',
-          minStockLevel: '',
-          initialStock: '',
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to add ingredient');
-      }
+      setShowAddModal(false);
+      setNewIngredient({
+        name: '',
+        sku: '',
+        unit: 'kg',
+        costPerUnit: '',
+        minStockLevel: '',
+        initialStock: '',
+      });
+      loadData();
     } catch (error) {
       console.error('Failed to add ingredient:', error);
       alert('Failed to add ingredient. Please try again.');
@@ -168,32 +144,26 @@ export default function Inventory() {
   const handleAdjustStock = async () => {
     if (!selectedIngredient) return;
     try {
-      const API_BASE = 'http://localhost:4000';
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
       const adjustment = isRestock 
         ? parseFloat(stockAdjustment) 
         : -parseFloat(stockAdjustment);
       
-      const response = await fetch(`${API_BASE}/inventory/ingredients/${selectedIngredient.id}/adjust`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
+      await axios.post(
+        `http://localhost:4000/api/v1/inventory/ingredients/${selectedIngredient.id}/adjust`,
+        {
           adjustment,
           reason: isRestock ? 'Restock' : 'Usage',
-        }),
-      });
+        },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
       
-      if (response.ok) {
-        setShowStockModal(false);
-        setStockAdjustment('');
-        setIsRestock(false);
-        setSelectedIngredient(null);
-        loadData();
-      } else {
-        throw new Error('Failed to adjust stock');
-      }
+      setShowStockModal(false);
+      setStockAdjustment('');
+      setIsRestock(false);
+      setSelectedIngredient(null);
+      loadData();
     } catch (error) {
       console.error('Failed to adjust stock:', error);
       alert('Failed to adjust stock. Please try again.');
@@ -401,7 +371,7 @@ export default function Inventory() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-600">
-                      {recipe.items.map((item, idx) => (
+                      {recipe.items.map((item) => (
                         <div key={item.id}>
                           {item.quantity} {item.unit} {item.ingredientName} (${item.cost.toFixed(2)})
                         </div>
@@ -651,34 +621,28 @@ export default function Inventory() {
                 <button
                   onClick={async () => {
                     try {
-                      const API_BASE = 'http://localhost:4000';
-                      const response = await fetch(`${API_BASE}/inventory/recipes`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                        },
-                        body: JSON.stringify({
+                      const token = localStorage.getItem('owner_token');
+                      const restaurantId = localStorage.getItem('owner_restaurant_id');
+                      await axios.post(
+                        'http://localhost:4000/api/v1/inventory/recipes',
+                        {
                           name: newRecipe.name,
                           productId: newRecipe.productId,
                           items: newRecipe.items.map(item => ({
                             ingredientId: item.ingredientId,
                             quantity: parseFloat(item.quantity) || 0,
                           })),
-                        }),
-                      });
+                        },
+                        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+                      );
                       
-                      if (response.ok) {
-                        setShowRecipeModal(false);
-                        setNewRecipe({
-                          name: '',
-                          productId: '',
-                          items: [],
-                        });
-                        loadData();
-                      } else {
-                        throw new Error('Failed to create recipe');
-                      }
+                      setShowRecipeModal(false);
+                      setNewRecipe({
+                        name: '',
+                        productId: '',
+                        items: [],
+                      });
+                      loadData();
                     } catch (error) {
                       console.error('Failed to create recipe:', error);
                       alert('Failed to create recipe. Please try again.');

@@ -5,8 +5,17 @@ declare global {
     interface Request {
       user?: {
         userId: string;
-        restaurantId: string;
+        restaurantId: string | null;
         role: UserRole;
+      };
+      subscription?: {
+        id: string;
+        status: string;
+        planId: string;
+        maxScreens: number;
+        maxTables: number;
+        maxStaff: number;
+        maxLocations: number;
       };
     }
   }

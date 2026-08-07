@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface AnalyticsData {
   totalRevenue: number;
@@ -35,7 +36,8 @@ export default function Analytics() {
 
   const loadAnalytics = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
       const endDate = new Date().toISOString().split('T')[0];
       let startDate = endDate;
 
@@ -49,18 +51,15 @@ export default function Analytics() {
         startDate = monthAgo.toISOString().split('T')[0];
       }
 
-      const res = await fetch(
-        `${API_BASE}/analytics/sales?startDate=${startDate}&endDate=${endDate}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        }
-      );
+      const res = await axios.get('http://localhost:4000/api/v1/analytics/sales', {
+        params: { startDate, endDate },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Restaurant-ID': restaurantId || ''
+        },
+      });
       
-      if (res.ok) {
-        setAnalytics(await res.json());
-      }
+      setAnalytics(res.data);
     } catch (error) {
       console.error('Failed to load analytics:', error);
     } finally {
@@ -70,16 +69,16 @@ export default function Analytics() {
 
   const loadRealTimeMetrics = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/analytics/real-time`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const res = await axios.get('http://localhost:4000/api/v1/analytics/real-time', {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Restaurant-ID': restaurantId || ''
         },
       });
       
-      if (res.ok) {
-        setRealTimeMetrics(await res.json());
-      }
+      setRealTimeMetrics(res.data);
     } catch (error) {
       console.error('Failed to load real-time metrics:', error);
     }

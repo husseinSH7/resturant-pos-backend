@@ -2,13 +2,14 @@ import { prisma } from "../../prisma.js";
 import { OrderStatus, TableStatus, OrderType, PaymentMethod, Prisma } from "@prisma/client";
 import { createKitchenTicketForOrder } from "../kitchen/kitchen.service.js";
 import { broadcastToRestaurant } from "../../websocket/index.js";
+import { createAuditLog } from "../../services/audit.service.js";
 
 type OrderInputItem = {
   productId: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  notes?: string;
+  notes?: string | null;
   modifiers?: { modifierOptionId?: string; nameSnapshot?: string; priceDelta?: number }[];
 };
 
@@ -22,7 +23,7 @@ export async function createOrder(
     subtotal?: number;
     taxAmount?: number;
     totalAmount?: number;
-    notes?: string;
+    notes?: string | null;
     items: OrderInputItem[];
   }
 ) {
@@ -193,7 +194,7 @@ export async function payOrder(
   orderId: string,
   data: {
     paymentMethod: string;
-    terminalReference?: string;
+    terminalReference?: string | undefined;
   }
 ) {
   const order = await prisma.order.findFirst({
@@ -257,6 +258,15 @@ export async function voidOrder(restaurantId: string, userId: string, orderId: s
     });
   });
 
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "ORDER_VOIDED",
+    entityType: "ORDER",
+    entityId: orderId,
+    details: `Voided order #${order.orderNumber} for $${order.totalAmount}. Reason: ${reason || "No reason provided"}`,
+  });
+
   return mapOrder(updated);
 }
 
@@ -267,20 +277,20 @@ export async function refundOrder(
   data: {
     amount: number;
     reason: string;
-    paymentId?: string;
+    paymentId?: string | undefined;
   }
 ) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, restaurantId },
-    include: { payments: true },
+    include: { Payment: true },
   });
 
   if (!order) throw new Error("Order not found");
   if (order.status !== OrderStatus.PAID) throw new Error("Order must be paid to refund");
 
   const payment = data.paymentId
-    ? order.payments.find((p) => p.id === data.paymentId)
-    : order.payments[0];
+    ? order.Payment.find((p: any) => p.id === data.paymentId)
+    : order.Payment[0];
 
   if (!payment) throw new Error("Payment not found");
   if (data.amount > Number(payment.amount)) throw new Error("Refund amount exceeds payment amount");
@@ -294,6 +304,7 @@ export async function refundOrder(
         amount: new Prisma.Decimal(data.amount),
         reason: data.reason,
         reference: `REF-${Date.now()}`,
+        updatedAt: new Date(),
       },
     });
 
@@ -311,6 +322,15 @@ export async function refundOrder(
     }
 
     return createdRefund;
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "ORDER_REFUNDED",
+    entityType: "REFUND",
+    entityId: refund.id,
+    details: `Refunded $${data.amount} for order #${order.orderNumber}. Reason: ${data.reason}`,
   });
 
   return {

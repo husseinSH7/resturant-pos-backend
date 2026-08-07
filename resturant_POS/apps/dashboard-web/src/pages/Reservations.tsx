@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface Reservation {
   id: string;
@@ -63,26 +64,22 @@ export default function Reservations() {
 
   const loadData = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const headers = { 
+        Authorization: `Bearer ${token}`,
+        'X-Restaurant-ID': restaurantId || ''
+      };
       
       if (activeTab === 'reservations') {
-        const res = await fetch(`${API_BASE}/reservations?date=${selectedDate}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
+        const res = await axios.get('http://localhost:4000/api/v1/reservations', { 
+          params: { date: selectedDate },
+          headers 
         });
-        if (res.ok) {
-          setReservations(await res.json());
-        }
+        setReservations(res.data);
       } else {
-        const res = await fetch(`${API_BASE}/reservations/waitlist`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (res.ok) {
-          setWaitlist(await res.json());
-        }
+        const res = await axios.get('http://localhost:4000/api/v1/reservations/waitlist', { headers });
+        setWaitlist(res.data);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -93,33 +90,27 @@ export default function Reservations() {
 
   const createReservation = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/reservations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(newReservation),
-      });
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.post(
+        'http://localhost:4000/api/v1/reservations',
+        newReservation,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
       
-      if (res.ok) {
-        setShowReservationModal(false);
-        setNewReservation({
-          customerName: '',
-          customerPhone: '',
-          customerEmail: '',
-          guestCount: 2,
-          date: new Date().toISOString().split('T')[0],
-          time: '',
-          tableId: '',
-          notes: '',
-          specialRequests: '',
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to create reservation');
-      }
+      setShowReservationModal(false);
+      setNewReservation({
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '',
+        guestCount: 2,
+        date: new Date().toISOString().split('T')[0],
+        time: '',
+        tableId: '',
+        notes: '',
+        specialRequests: '',
+      });
+      loadData();
     } catch (error) {
       console.error('Failed to create reservation:', error);
       alert('Failed to create reservation. Please try again.');
@@ -128,28 +119,22 @@ export default function Reservations() {
 
   const addToWaitlist = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/reservations/waitlist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(newWaitlistEntry),
-      });
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.post(
+        'http://localhost:4000/api/v1/reservations/waitlist',
+        newWaitlistEntry,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
       
-      if (res.ok) {
-        setShowWaitlistModal(false);
-        setNewWaitlistEntry({
-          customerName: '',
-          customerPhone: '',
-          guestCount: 2,
-          notes: '',
-        });
-        loadData();
-      } else {
-        throw new Error('Failed to add to waitlist');
-      }
+      setShowWaitlistModal(false);
+      setNewWaitlistEntry({
+        customerName: '',
+        customerPhone: '',
+        guestCount: 2,
+        notes: '',
+      });
+      loadData();
     } catch (error) {
       console.error('Failed to add to waitlist:', error);
       alert('Failed to add to waitlist. Please try again.');
@@ -158,19 +143,14 @@ export default function Reservations() {
 
   const updateReservationStatus = async (id: string, status: string) => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/reservations/${id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      
-      if (res.ok) {
-        loadData();
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.put(
+        `http://localhost:4000/api/v1/reservations/${id}/status`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      loadData();
     } catch (error) {
       console.error('Failed to update reservation:', error);
     }
@@ -178,19 +158,14 @@ export default function Reservations() {
 
   const updateWaitlistStatus = async (id: string, status: string) => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/reservations/waitlist/${id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      
-      if (res.ok) {
-        loadData();
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.put(
+        `http://localhost:4000/api/v1/reservations/waitlist/${id}/status`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      loadData();
     } catch (error) {
       console.error('Failed to update waitlist:', error);
     }

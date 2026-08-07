@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface RestaurantSettings {
   id: string;
@@ -61,46 +62,30 @@ export default function Settings() {
 
   const loadSettings = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const headers = { 
+        Authorization: `Bearer ${token}`,
+        'X-Restaurant-ID': restaurantId || ''
+      };
       
       if (activeTab === 'restaurant') {
-        const res = await fetch(`${API_BASE}/settings/restaurant`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
+        const res = await axios.get('http://localhost:4000/api/v1/settings/restaurant', { headers });
+        setRestaurantSettings(res.data);
+        setEditRestaurant({
+          name: res.data.name,
+          address: res.data.address || '',
+          phone: res.data.phone || '',
+          isActive: res.data.isActive,
         });
-        if (res.ok) {
-          const data = await res.json();
-          setRestaurantSettings(data);
-          setEditRestaurant({
-            name: data.name,
-            address: data.address || '',
-            phone: data.phone || '',
-            isActive: data.isActive,
-          });
-        }
       } else if (activeTab === 'tax') {
-        const res = await fetch(`${API_BASE}/settings/tax`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setTaxSettings(data);
-          setEditTax(data);
-        }
+        const res = await axios.get('http://localhost:4000/api/v1/settings/tax', { headers });
+        setTaxSettings(res.data);
+        setEditTax(res.data);
       } else if (activeTab === 'receipt') {
-        const res = await fetch(`${API_BASE}/settings/receipt`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setReceiptSettings(data);
-          setEditReceipt(data);
-        }
+        const res = await axios.get('http://localhost:4000/api/v1/settings/receipt', { headers });
+        setReceiptSettings(res.data);
+        setEditReceipt(res.data);
       }
     } catch (error) {
       console.error('Failed to load settings:', error);
@@ -111,22 +96,15 @@ export default function Settings() {
 
   const saveRestaurantSettings = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/settings/restaurant`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(editRestaurant),
-      });
-      
-      if (res.ok) {
-        setRestaurantSettings(await res.json());
-        alert('Restaurant settings saved successfully');
-      } else {
-        throw new Error('Failed to save settings');
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const res = await axios.put(
+        'http://localhost:4000/api/v1/settings/restaurant',
+        editRestaurant,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      setRestaurantSettings(res.data);
+      alert('Restaurant settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
@@ -135,22 +113,15 @@ export default function Settings() {
 
   const saveTaxSettings = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/settings/tax`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(editTax),
-      });
-      
-      if (res.ok) {
-        setTaxSettings(await res.json());
-        alert('Tax settings saved successfully');
-      } else {
-        throw new Error('Failed to save settings');
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const res = await axios.put(
+        'http://localhost:4000/api/v1/settings/tax',
+        editTax,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      setTaxSettings(res.data);
+      alert('Tax settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');
@@ -159,22 +130,15 @@ export default function Settings() {
 
   const saveReceiptSettings = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/settings/receipt`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(editReceipt),
-      });
-      
-      if (res.ok) {
-        setReceiptSettings(await res.json());
-        alert('Receipt settings saved successfully');
-      } else {
-        throw new Error('Failed to save settings');
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const res = await axios.put(
+        'http://localhost:4000/api/v1/settings/receipt',
+        editReceipt,
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      setReceiptSettings(res.data);
+      alert('Receipt settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);
       alert('Failed to save settings. Please try again.');

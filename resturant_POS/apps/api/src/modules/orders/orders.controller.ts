@@ -1,12 +1,31 @@
 import type { Request, Response } from "express";
 import { createOrder, getOrders, getOrderById, addOrderItems, payOrder, voidOrder, refundOrder } from "./orders.service.js";
+import { createOrderSchema, addOrderItemsSchema, payOrderSchema, voidOrderSchema, refundOrderSchema } from "./orders.schemas.js";
 
 export async function create(req: Request, res: Response) {
   try {
-    const order = await createOrder(req.user!.restaurantId, req.user!.userId, req.body);
+    const validatedData = createOrderSchema.parse(req.body);
+    const order = await createOrder(req.user!.restaurantId, req.user!.userId, {
+      tableId: validatedData.tableId ?? null,
+      customerId: validatedData.customerId ?? null,
+      orderType: validatedData.orderType,
+      notes: validatedData.notes ?? null,
+      items: validatedData.items.map(item => ({
+        ...item,
+        notes: item.notes ?? null,
+        modifiers: item.modifiers?.map(m => ({
+          ...m,
+          priceDelta: m.priceDelta
+        })) ?? []
+      }))
+    });
     res.status(201).json(order);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Failed to create order" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Failed to create order" });
+    }
   }
 }
 
@@ -36,10 +55,22 @@ export async function addItems(req: Request, res: Response) {
   try {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
-    const items = await addOrderItems(req.user!.restaurantId, req.user!.userId, id, req.body.items);
+    const validatedData = addOrderItemsSchema.parse(req.body);
+    const items = await addOrderItems(req.user!.restaurantId, req.user!.userId, id, validatedData.items.map(item => ({
+      ...item,
+      notes: item.notes ?? null,
+      modifiers: item.modifiers?.map(m => ({
+        ...m,
+        priceDelta: m.priceDelta
+      })) ?? []
+    })));
     res.json(items);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Failed to add items" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Failed to add items" });
+    }
   }
 }
 
@@ -47,10 +78,18 @@ export async function pay(req: Request, res: Response) {
   try {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
-    const order = await payOrder(req.user!.restaurantId, req.user!.userId, id, req.body);
+    const validatedData = payOrderSchema.parse(req.body);
+    const order = await payOrder(req.user!.restaurantId, req.user!.userId, id, {
+      paymentMethod: validatedData.paymentMethod,
+      terminalReference: validatedData.terminalReference ?? undefined
+    });
     res.json({ success: true, order });
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Payment failed" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Payment failed" });
+    }
   }
 }
 
@@ -58,10 +97,15 @@ export async function voidOrderController(req: Request, res: Response) {
   try {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
-    const order = await voidOrder(req.user!.restaurantId, req.user!.userId, id, req.body.reason);
+    const validatedData = voidOrderSchema.parse(req.body);
+    const order = await voidOrder(req.user!.restaurantId, req.user!.userId, id, validatedData.reason);
     res.json({ success: true, order });
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Void failed" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Void failed" });
+    }
   }
 }
 
@@ -69,12 +113,18 @@ export async function refundOrderController(req: Request, res: Response) {
   try {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
-    const { amount, reason, paymentId } = req.body;
-    if (!amount || typeof amount !== "number") return res.status(400).json({ message: "Valid amount is required" });
-    if (!reason || typeof reason !== "string") return res.status(400).json({ message: "Reason is required" });
-    const result = await refundOrder(req.user!.restaurantId, req.user!.userId, id, { amount, reason, paymentId });
+    const validatedData = refundOrderSchema.parse(req.body);
+    const result = await refundOrder(req.user!.restaurantId, req.user!.userId, id, {
+      amount: validatedData.amount,
+      reason: validatedData.reason,
+      paymentId: validatedData.paymentId ?? undefined
+    });
     res.json(result);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Refund failed" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Refund failed" });
+    }
   }
 }

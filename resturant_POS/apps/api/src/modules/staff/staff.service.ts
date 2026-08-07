@@ -1,4 +1,13 @@
 import { prisma } from "../../prisma.js";
+import bcrypt from "bcrypt";
+import { UserRole } from "@prisma/client";
+import { createAuditLog } from "../../services/audit.service.js";
+
+const SALT_ROUNDS = 10;
+
+async function hashPin(pin: string): Promise<string> {
+  return bcrypt.hash(pin, SALT_ROUNDS);
+}
 
 export async function getStaffMembers(restaurantId: string) {
   const staff = await prisma.user.findMany({
@@ -29,7 +38,7 @@ export async function getStaffPerformance(restaurantId: string, startDate?: stri
   const orders = await prisma.order.findMany({
     where,
     include: {
-      User: true,
+      user: true,
     },
   });
 
@@ -39,7 +48,7 @@ export async function getStaffPerformance(restaurantId: string, startDate?: stri
     const staffId = order.userId;
     const existing = staffPerformance.get(staffId) || {
       staffId,
-      staffName: order.User?.fullName || "Unknown",
+      staffName: order.user?.fullName || "Unknown",
       totalOrders: 0,
       totalRevenue: 0,
       averageOrderValue: 0,
@@ -64,9 +73,11 @@ export async function getStaffPerformance(restaurantId: string, startDate?: stri
 export async function createStaffMember(restaurantId: string, data: {
   fullName: string;
   email: string;
-  role: string;
-  password: string;
-}) {
+  role: UserRole;
+  pin: string;
+}, actorUserId: string) {
+  const hashedPin = await hashPin(data.pin);
+  
   const staff = await prisma.user.create({
     data: {
       id: crypto.randomUUID(),
@@ -74,9 +85,18 @@ export async function createStaffMember(restaurantId: string, data: {
       fullName: data.fullName,
       email: data.email,
       role: data.role,
-      password: data.password, // In production, this should be hashed
+      pin: hashedPin,
       isActive: true,
     },
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId: actorUserId,
+    action: "STAFF_CREATED",
+    entityType: "USER",
+    entityId: staff.id,
+    details: `Created staff member ${data.fullName} with role ${data.role}`,
   });
 
   return {
@@ -89,20 +109,54 @@ export async function createStaffMember(restaurantId: string, data: {
 }
 
 export async function updateStaffMember(restaurantId: string, staffId: string, data: {
-  fullName?: string;
-  email?: string;
-  role?: string;
-  isActive?: boolean;
-}) {
+  fullName?: string | undefined;
+  email?: string | undefined;
+  role?: UserRole | undefined;
+  pin?: string | undefined;
+  isActive?: boolean | undefined;
+}, actorUserId: string) {
   const staff = await prisma.user.findFirst({
     where: { id: staffId, restaurantId },
   });
 
   if (!staff) throw new Error("Staff member not found");
 
+  const updateData: any = {};
+  const changes: string[] = [];
+  
+  if (data.fullName !== undefined) {
+    updateData.fullName = data.fullName;
+    changes.push(`fullName: ${staff.fullName} -> ${data.fullName}`);
+  }
+  if (data.email !== undefined) {
+    updateData.email = data.email;
+    changes.push(`email: ${staff.email} -> ${data.email}`);
+  }
+  if (data.role !== undefined) {
+    updateData.role = data.role;
+    changes.push(`role: ${staff.role} -> ${data.role}`);
+  }
+  if (data.pin !== undefined) {
+    updateData.pin = await hashPin(data.pin);
+    changes.push(`pin: updated`);
+  }
+  if (data.isActive !== undefined) {
+    updateData.isActive = data.isActive;
+    changes.push(`isActive: ${staff.isActive} -> ${data.isActive}`);
+  }
+
   const updated = await prisma.user.update({
     where: { id: staffId },
-    data,
+    data: updateData,
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId: actorUserId,
+    action: "STAFF_UPDATED",
+    entityType: "USER",
+    entityId: staffId,
+    details: `Updated staff member ${staff.fullName}: ${changes.join(", ")}`,
   });
 
   return {
@@ -114,7 +168,7 @@ export async function updateStaffMember(restaurantId: string, staffId: string, d
   };
 }
 
-export async function deleteStaffMember(restaurantId: string, staffId: string) {
+export async function deleteStaffMember(restaurantId: string, staffId: string, actorUserId: string) {
   const staff = await prisma.user.findFirst({
     where: { id: staffId, restaurantId },
   });
@@ -123,6 +177,15 @@ export async function deleteStaffMember(restaurantId: string, staffId: string) {
 
   await prisma.user.delete({
     where: { id: staffId },
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId: actorUserId,
+    action: "STAFF_DELETED",
+    entityType: "USER",
+    entityId: staffId,
+    details: `Deleted staff member ${staff.fullName} (${staff.role})`,
   });
 
   return { success: true, message: "Staff member deleted" };

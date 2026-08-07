@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 
 interface StaffMember {
   id: string;
   fullName: string;
   email: string;
   role: string;
+  pin: string | null;
   isActive: boolean;
   createdAt: string;
 }
@@ -25,7 +27,8 @@ export default function Staff() {
   const [newStaff, setNewStaff] = useState({
     fullName: '',
     email: '',
-    role: 'STAFF',
+    role: 'CASHIER',
+    pin: '',
     password: '',
   });
 
@@ -36,16 +39,15 @@ export default function Staff() {
 
   const loadStaff = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/staff`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      const res = await axios.get('http://localhost:4000/api/v1/staff', {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'X-Restaurant-ID': restaurantId || ''
         },
       });
-      
-      if (res.ok) {
-        setStaff(await res.json());
-      }
+      setStaff(res.data);
     } catch (error) {
       console.error('Failed to load staff:', error);
     } finally {
@@ -73,23 +75,16 @@ export default function Staff() {
 
   const createStaff = async () => {
     try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/staff`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(newStaff),
-      });
-      
-      if (res.ok) {
-        setShowAddModal(false);
-        setNewStaff({ fullName: '', email: '', role: 'STAFF', password: '' });
-        loadStaff();
-      } else {
-        throw new Error('Failed to create staff member');
-      }
+      const token = localStorage.getItem('owner_token');
+      const restaurantId = localStorage.getItem('owner_restaurant_id');
+      await axios.post(
+        'http://localhost:4000/api/v1/staff',
+        { ...newStaff, restaurantId },
+        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
+      );
+      setShowAddModal(false);
+      setNewStaff({ fullName: '', email: '', role: 'CASHIER', pin: '', password: '' });
+      loadStaff();
     } catch (error) {
       console.error('Failed to create staff:', error);
       alert('Failed to create staff member. Please try again.');
@@ -179,6 +174,9 @@ export default function Staff() {
                     Role
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    PIN
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -194,6 +192,9 @@ export default function Staff() {
                     </td>
                     <td className="px-6 py-4 text-gray-600">{member.email}</td>
                     <td className="px-6 py-4 text-gray-600">{member.role}</td>
+                    <td className="px-6 py-4 text-gray-600">
+                      {member.pin ? '••••' : 'Not set'}
+                    </td>
                     <td className="px-6 py-4">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -254,14 +255,27 @@ export default function Staff() {
                     onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   >
-                    <option value="STAFF">Staff</option>
+                    <option value="CASHIER">Cashier</option>
                     <option value="MANAGER">Manager</option>
-                    <option value="ADMIN">Admin</option>
+                    <option value="KITCHEN">Kitchen</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password
+                    PIN (for POS login)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={newStaff.pin}
+                    onChange={(e) => setNewStaff({ ...newStaff, pin: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="4-digit PIN"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password (for dashboard login)
                   </label>
                   <input
                     type="password"

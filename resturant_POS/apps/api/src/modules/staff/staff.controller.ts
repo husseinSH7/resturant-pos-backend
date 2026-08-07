@@ -6,6 +6,7 @@ import {
   updateStaffMember,
   deleteStaffMember,
 } from "./staff.service.js";
+import { createStaffSchema, updateStaffSchema } from "./staff.schemas.js";
 
 export async function list(req: Request, res: Response) {
   try {
@@ -32,42 +33,39 @@ export async function performance(req: Request, res: Response) {
 
 export async function create(req: Request, res: Response) {
   try {
-    const { fullName, email, role, password } = req.body;
-    if (!fullName || !email || !role || !password) {
-      return res.status(400).json({ message: "All fields are required" });
-    }
-    const staff = await createStaffMember(req.user!.restaurantId, {
-      fullName,
-      email,
-      role,
-      password,
-    });
+    const validatedData = createStaffSchema.parse(req.body);
+    const staff = await createStaffMember(req.user!.restaurantId, validatedData, req.user!.userId);
     res.status(201).json(staff);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Failed to create staff member" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Failed to create staff member" });
+    }
   }
 }
 
 export async function update(req: Request, res: Response) {
   try {
     const id = req.params.id;
-    const { fullName, email, role, isActive } = req.body;
-    const staff = await updateStaffMember(req.user!.restaurantId, id, {
-      fullName,
-      email,
-      role,
-      isActive,
-    });
+    if (typeof id !== "string") return res.status(400).json({ message: "Invalid staff ID" });
+    const validatedData = updateStaffSchema.parse(req.body);
+    const staff = await updateStaffMember(req.user!.restaurantId, id, validatedData, req.user!.userId);
     res.json(staff);
   } catch (error: any) {
-    res.status(400).json({ message: error.message || "Failed to update staff member" });
+    if (error.name === 'ZodError') {
+      res.status(400).json({ message: "Invalid input", errors: error.errors });
+    } else {
+      res.status(400).json({ message: error.message || "Failed to update staff member" });
+    }
   }
 }
 
 export async function remove(req: Request, res: Response) {
   try {
     const id = req.params.id;
-    const result = await deleteStaffMember(req.user!.restaurantId, id);
+    if (typeof id !== "string") return res.status(400).json({ message: "Invalid staff ID" });
+    const result = await deleteStaffMember(req.user!.restaurantId, id, req.user!.userId);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to delete staff member" });

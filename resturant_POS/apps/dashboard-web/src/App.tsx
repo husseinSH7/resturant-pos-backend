@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import Inventory from './pages/Inventory'
 import Reservations from './pages/Reservations'
 import Analytics from './pages/Analytics'
@@ -7,8 +7,15 @@ import Staff from './pages/Staff'
 import Settings from './pages/Settings'
 import Tables from './pages/Tables'
 import Admin from './pages/Admin'
+import Login from './pages/Login'
+import Menu from './pages/Menu'
 import { useKeyboardShortcuts, commonShortcuts } from './hooks/useKeyboardShortcuts'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp'
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const token = localStorage.getItem('owner_token');
+  return token ? <>{children}</> : <Navigate to="/login" />;
+}
 
 function AppContent() {
   const location = useLocation();
@@ -102,6 +109,15 @@ function AppContent() {
                   Settings
                 </Link>
                 <Link
+                  to="/menu"
+                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
+                    location.pathname === '/menu' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                  aria-current={location.pathname === '/menu' ? 'page' : undefined}
+                >
+                  Menu
+                </Link>
+                <Link
                   to="/admin"
                   className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
                     location.pathname === '/admin' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
@@ -119,17 +135,55 @@ function AppContent() {
       {/* Main Content */}
       <main id="main-content" className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8" role="main">
         <Routes>
-          <Route path="/" element={<div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Restaurant POS Dashboard</h2>
-            <p className="text-gray-600">Select a module from the navigation above to get started.</p>
-          </div>} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/tables" element={<Tables />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/reservations" element={<Reservations />} />
-          <Route path="/staff" element={<Staff />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/admin" element={<Admin />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <div className="text-center py-12">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Restaurant POS Dashboard</h2>
+                <p className="text-gray-600">Select a module from the navigation above to get started.</p>
+              </div>
+            </ProtectedRoute>
+          } />
+          <Route path="/analytics" element={
+            <ProtectedRoute>
+              <Analytics />
+            </ProtectedRoute>
+          } />
+          <Route path="/tables" element={
+            <ProtectedRoute>
+              <Tables />
+            </ProtectedRoute>
+          } />
+          <Route path="/inventory" element={
+            <ProtectedRoute>
+              <Inventory />
+            </ProtectedRoute>
+          } />
+          <Route path="/reservations" element={
+            <ProtectedRoute>
+              <Reservations />
+            </ProtectedRoute>
+          } />
+          <Route path="/staff" element={
+            <ProtectedRoute>
+              <Staff />
+            </ProtectedRoute>
+          } />
+          <Route path="/menu" element={
+            <ProtectedRoute>
+              <Menu />
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          } />
         </Routes>
       </main>
 

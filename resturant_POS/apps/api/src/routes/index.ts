@@ -13,6 +13,8 @@ import reservationRoutes from "../modules/reservations/reservations.routes.js";
 import analyticsRoutes from "../modules/analytics/analytics.routes.js";
 import staffRoutes from "../modules/staff/staff.routes.js";
 import settingsRoutes from "../modules/settings/settings.routes.js";
+import deviceRoutes from "../modules/devices/device.routes.js";
+import platformAdminRoutes from "../modules/platform-admin/platform-admin.routes.js";
 
 const router = Router();
 
@@ -30,5 +32,7 @@ router.use("/reservations", reservationRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/staff", staffRoutes);
 router.use("/settings", settingsRoutes);
+router.use("/devices", deviceRoutes);
+router.use("/platform-admin", platformAdminRoutes);
 
 export default router;

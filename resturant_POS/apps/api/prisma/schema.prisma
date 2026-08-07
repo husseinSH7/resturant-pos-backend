@@ -6,6 +6,62 @@ datasource db {
   provider = "postgresql"
 }
 
+model Plan {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  basePrice   Decimal  @db.Decimal(10, 2)
+  maxTables   Int      @default(10)
+  maxScreens  Int      @default(5)
+  maxStaff    Int      @default(10)
+  maxLocations Int     @default(1)
+  features    Json     @default("{}")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  subscriptions Subscription[]
+
+  @@index([isActive])
+}
+
+model Subscription {
+  id            String             @id @default(uuid())
+  restaurantId  String             @unique
+  planId        String
+  status        SubscriptionStatus @default(TRIAL)
+  trialUntil    DateTime?
+  paidUntil     DateTime?
+  cancelledAt   DateTime?
+  maxScreens    Int?
+  maxTables     Int?
+  maxStaff      Int?
+  maxLocations  Int?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  restaurant    Restaurant         @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  plan          Plan               @relation(fields: [planId], references: [id])
+
+  @@index([restaurantId])
+  @@index([planId])
+  @@index([status])
+}
+
+model Device {
+  id           String      @id @default(uuid())
+  restaurantId String
+  deviceId     String      @unique
+  deviceType   DeviceType
+  name         String?
+  lastSeenAt   DateTime?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  restaurant   Restaurant  @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([deviceId])
+  @@index([isActive])
+}
+
 model Restaurant {
   id            String          @id @default(uuid())
   name          String
@@ -15,6 +71,7 @@ model Restaurant {
   isActive      Boolean         @default(true)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
+  subscription  Subscription?
   categories    Category[]
   customers     Customer[]
   KitchenTicket KitchenTicket[]
@@ -27,6 +84,7 @@ model Restaurant {
   tables        Table[]
   TableArea     TableArea[]
   users         User[]
+  devices       Device[]
   Ingredient    Ingredient[]
   Recipe        Recipe[]
   StockAdjustment StockAdjustment[]
@@ -34,14 +92,16 @@ model Restaurant {
   MarketingCampaign MarketingCampaign[]
   Reservation   Reservation[]
   WaitlistEntry WaitlistEntry[]
+  AuditLog      AuditLog[]
 }
 
 model User {
   id           String     @id @default(uuid())
-  restaurantId String
+  restaurantId String?
   fullName     String
-  pin          String
+  pin          String?
   email        String?    @unique
+  passwordHash String?
   role         UserRole
   isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())
@@ -51,10 +111,11 @@ model User {
   Refund       Refund[]
   shifts       Shift[]
   Table        Table[]
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
   @@index([restaurantId])
   @@index([restaurantId, role])
+  @@index([email])
 }
 
 model Category {
@@ -523,10 +584,25 @@ model TableArea {
 }
 
 enum UserRole {
+  PLATFORM_ADMIN
   OWNER
   MANAGER
   CASHIER
   KITCHEN
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum DeviceType {
+  POS
+  KDS
+  MANAGER_TABLET
 }
 
 enum OrderStatus {
@@ -594,4 +670,23 @@ enum WaitlistStatus {
   CALLED
   SEATED
   CANCELLED
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  restaurantId  String
+  userId        String
+  action        String
+  entityType    String
+  entityId      String?
+  details       String?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+  Restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }
