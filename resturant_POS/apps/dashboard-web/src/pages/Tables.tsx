@@ -1,480 +1,416 @@
 import { useState, useEffect } from 'react';
+import { Plus, Edit2, Trash2, Users, MapPin, Clock, ArrowRightLeft, Merge } from 'lucide-react';
 
 interface Table {
   id: string;
   name: string;
   seats: number;
-  status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED';
-  areaId?: string;
+  area: string;
+  status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'DIRTY';
   x?: number;
   y?: number;
   width?: number;
   height?: number;
-  shape?: 'RECTANGLE' | 'SQUARE' | 'ROUND';
+  currentOrderId?: string;
   guestCount?: number;
-  serverId?: string;
+  occupiedSince?: string;
 }
 
-interface TableArea {
+interface Area {
   id: string;
   name: string;
-  restaurantId: string;
+  color: string;
 }
 
 export default function Tables() {
   const [tables, setTables] = useState<Table[]>([]);
-  const [areas, setAreas] = useState<TableArea[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [areas, setAreas] = useState<Area[]>([
+    { id: '1', name: 'Main Dining', color: '#f97316' },
+    { id: '2', name: 'Patio', color: '#3b82f6' },
+    { id: '3', name: 'Private Room', color: '#10b981' },
+  ]);
   const [selectedArea, setSelectedArea] = useState<string>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'visual'>('grid');
+  const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [draggedTable, setDraggedTable] = useState<Table | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-
-  const [newTable, setNewTable] = useState({
-    name: '',
-    seats: 2,
-    areaId: '',
-    shape: 'RECTANGLE' as const,
-    x: 50,
-    y: 50,
-    width: 100,
-    height: 80,
-  });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadTables();
-    loadAreas();
+    // Mock data - replace with actual API calls
+    setTimeout(() => {
+      setTables([
+        { id: '1', name: 'Table 1', seats: 4, area: 'Main Dining', status: 'OCCUPIED', guestCount: 3, occupiedSince: '19:30' },
+        { id: '2', name: 'Table 2', seats: 2, area: 'Main Dining', status: 'AVAILABLE' },
+        { id: '3', name: 'Table 3', seats: 6, area: 'Main Dining', status: 'RESERVED' },
+        { id: '4', name: 'Table 4', seats: 4, area: 'Patio', status: 'OCCUPIED', guestCount: 4, occupiedSince: '20:15' },
+        { id: '5', name: 'Table 5', seats: 2, area: 'Patio', status: 'AVAILABLE' },
+        { id: '6', name: 'Table 6', seats: 8, area: 'Private Room', status: 'DIRTY' },
+        { id: '7', name: 'Table 7', seats: 4, area: 'Main Dining', status: 'AVAILABLE' },
+        { id: '8', name: 'Table 8', seats: 4, area: 'Main Dining', status: 'OCCUPIED', guestCount: 2, occupiedSince: '21:00' },
+      ]);
+      setLoading(false);
+    }, 1000);
   }, []);
 
-  const loadTables = async () => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/tables`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        setTables(await res.json());
-      }
-    } catch (error) {
-      console.error('Failed to load tables:', error);
-    } finally {
-      setLoading(false);
+  const filteredTables = selectedArea === 'all' 
+    ? tables 
+    : tables.filter(table => table.area === selectedArea);
+
+  const handleAddTable = () => {
+    setEditingTable(null);
+    setShowModal(true);
+  };
+
+  const handleEditTable = (table: Table) => {
+    setEditingTable(table);
+    setShowModal(true);
+  };
+
+  const handleDeleteTable = (id: string) => {
+    if (confirm('Are you sure you want to delete this table?')) {
+      setTables(tables.filter(table => table.id !== id));
     }
   };
 
-  const loadAreas = async () => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/tables/areas`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        setAreas(await res.json());
-      }
-    } catch (error) {
-      console.error('Failed to load areas:', error);
+  const handleSaveTable = (tableData: Partial<Table>) => {
+    if (editingTable) {
+      setTables(tables.map(table =>
+        table.id === editingTable.id ? { ...table, ...tableData } : table
+      ));
+    } else {
+      const newTable: Table = {
+        id: Date.now().toString(),
+        name: tableData.name || 'New Table',
+        seats: tableData.seats || 4,
+        area: tableData.area || 'Main Dining',
+        status: 'AVAILABLE',
+      };
+      setTables([...tables, newTable]);
     }
+    setShowModal(false);
   };
 
-  const createTable = async () => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/tables`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(newTable),
-      });
-      
-      if (res.ok) {
-        setShowAddModal(false);
-        setNewTable({
-          name: '',
-          seats: 2,
-          areaId: '',
-          shape: 'RECTANGLE',
-          x: 50,
-          y: 50,
-          width: 100,
-          height: 80,
-        });
-        loadTables();
-      } else {
-        throw new Error('Failed to create table');
-      }
-    } catch (error) {
-      console.error('Failed to create table:', error);
-      alert('Failed to create table. Please try again.');
-    }
+  const handleTransferTable = (tableId: string) => {
+    // Implement table transfer logic
+    console.log('Transfer table:', tableId);
   };
 
-  const updateTableStatus = async (tableId: string, status: string) => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/tables/${tableId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      
-      if (res.ok) {
-        loadTables();
-      }
-    } catch (error) {
-      console.error('Failed to update table:', error);
-    }
-  };
-
-  const updateTablePosition = async (tableId: string, x: number, y: number) => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/tables/${tableId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ x, y }),
-      });
-      
-      if (res.ok) {
-        loadTables();
-      }
-    } catch (error) {
-      console.error('Failed to update table position:', error);
-    }
-  };
-
-  const handleMouseDown = (e: React.MouseEvent, table: Table) => {
-    e.preventDefault();
-    setIsDragging(true);
-    setDraggedTable(table);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !draggedTable) return;
-    
-    const container = e.currentTarget as HTMLElement;
-    const containerRect = container.getBoundingClientRect();
-    
-    const newX = e.clientX - containerRect.left - dragOffset.x;
-    const newY = e.clientY - containerRect.top - dragOffset.y;
-    
-    // Constrain to container bounds
-    const constrainedX = Math.max(0, Math.min(newX, containerRect.width - (draggedTable.width || 100)));
-    const constrainedY = Math.max(0, Math.min(newY, containerRect.height - (draggedTable.height || 80)));
-    
-    setDraggedTable({ ...draggedTable, x: constrainedX, y: constrainedY });
-  };
-
-  const handleMouseUp = () => {
-    if (isDragging && draggedTable) {
-      updateTablePosition(draggedTable.id, draggedTable.x || 0, draggedTable.y || 0);
-    }
-    setIsDragging(false);
-    setDraggedTable(null);
+  const handleMergeTables = () => {
+    // Implement table merge logic
+    console.log('Merge tables');
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'AVAILABLE': return 'bg-green-100 border-green-500 text-green-800';
-      case 'OCCUPIED': return 'bg-red-100 border-red-500 text-red-800';
-      case 'RESERVED': return 'bg-yellow-100 border-yellow-500 text-yellow-800';
-      default: return 'bg-gray-100 border-gray-500 text-gray-800';
+      case 'AVAILABLE': return 'bg-green-100 text-green-700';
+      case 'OCCUPIED': return 'bg-orange-100 text-orange-700';
+      case 'RESERVED': return 'bg-blue-100 text-blue-700';
+      case 'DIRTY': return 'bg-red-100 text-red-700';
+      default: return 'bg-gray-100 text-gray-700';
     }
   };
 
-  const filteredTables = selectedArea === 'all' 
-    ? tables 
-    : tables.filter(t => t.areaId === selectedArea);
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading tables...</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Table Management</h1>
-            <p className="text-gray-600 mt-1">Visual floor plan and table status</p>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Tables Management</h1>
+        <div className="flex space-x-3">
           <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+            onClick={handleMergeTables}
+            className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
           >
-            + Add Table
+            <Merge className="h-5 w-5" />
+            <span>Merge Tables</span>
+          </button>
+          <button
+            onClick={handleAddTable}
+            className="flex items-center space-x-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+          >
+            <Plus className="h-5 w-5" />
+            <span>Add Table</span>
           </button>
         </div>
+      </div>
 
-        {/* Area Filter */}
-        <div className="flex gap-2 mb-6">
+      {/* Filters */}
+      <div className="flex items-center space-x-4">
+        <div className="flex space-x-2">
           <button
-            onClick={() => setSelectedArea('all')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${
-              selectedArea === 'all' ? 'bg-orange-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
+            onClick={() => setViewMode('grid')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-orange-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
             }`}
           >
-            All Areas
+            Grid View
           </button>
-          {areas.map((area) => (
-            <button
-              key={area.id}
-              onClick={() => setSelectedArea(area.id)}
-              className={`px-4 py-2 rounded-lg font-medium transition ${
-                selectedArea === area.id ? 'bg-orange-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {area.name}
-            </button>
+          <button
+            onClick={() => setViewMode('visual')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              viewMode === 'visual'
+                ? 'bg-orange-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            Visual Layout
+          </button>
+        </div>
+        <select
+          value={selectedArea}
+          onChange={(e) => setSelectedArea(e.target.value)}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        >
+          <option value="all">All Areas</option>
+          {areas.map(area => (
+            <option key={area.id} value={area.name}>{area.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard label="Total Tables" value={tables.length} icon={<MapPin className="h-5 w-5" />} />
+        <StatCard label="Available" value={tables.filter(t => t.status === 'AVAILABLE').length} icon={<Users className="h-5 w-5" />} color="green" />
+        <StatCard label="Occupied" value={tables.filter(t => t.status === 'OCCUPIED').length} icon={<Users className="h-5 w-5" />} color="orange" />
+        <StatCard label="Reserved" value={tables.filter(t => t.status === 'RESERVED').length} icon={<Clock className="h-5 w-5" />} color="blue" />
+      </div>
+
+      {/* Tables Grid */}
+      {viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredTables.map((table) => (
+            <TableCard
+              key={table.id}
+              table={table}
+              onEdit={() => handleEditTable(table)}
+              onDelete={() => handleDeleteTable(table.id)}
+              onTransfer={() => handleTransferTable(table.id)}
+              getStatusColor={getStatusColor}
+            />
           ))}
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Total Tables</div>
-            <div className="text-3xl font-bold text-gray-900">{filteredTables.length}</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Available</div>
-            <div className="text-3xl font-bold text-green-600">
-              {filteredTables.filter(t => t.status === 'AVAILABLE').length}
-            </div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Occupied</div>
-            <div className="text-3xl font-bold text-red-600">
-              {filteredTables.filter(t => t.status === 'OCCUPIED').length}
+      ) : (
+        <div className="bg-white rounded-lg shadow p-6 min-h-[500px] border-2 border-dashed border-gray-300">
+          <div className="flex items-center justify-center h-full text-gray-400">
+            <div className="text-center">
+              <MapPin className="h-16 w-16 mx-auto mb-4" />
+              <p className="text-lg font-medium">Visual Floor Plan Editor</p>
+              <p className="text-sm">Drag and drop tables to arrange your floor plan</p>
+              <p className="text-xs mt-2">(Coming soon - drag-and-drop functionality)</p>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Visual Floor Plan */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Floor Plan (Drag tables to reposition)</h2>
-          <div 
-            className="relative bg-gray-100 rounded-lg h-96 overflow-hidden border-2 border-dashed border-gray-300"
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
+      {/* Modal */}
+      {showModal && (
+        <TableModal
+          table={editingTable}
+          areas={areas}
+          onSave={handleSaveTable}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TableCard({ table, onEdit, onDelete, onTransfer, getStatusColor }: {
+  table: Table;
+  onEdit: () => void;
+  onDelete: () => void;
+  onTransfer: () => void;
+  getStatusColor: (status: string) => string;
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h3 className="font-semibold text-gray-900">{table.name}</h3>
+          <p className="text-sm text-gray-500">{table.area}</p>
+        </div>
+        <div className="flex space-x-1">
+          <button
+            onClick={onEdit}
+            className="p-1.5 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            {filteredTables.map((table) => {
-              const displayTable = draggedTable?.id === table.id ? draggedTable : table;
-              return (
-                <div
-                  key={table.id}
-                  className={`absolute cursor-move border-2 rounded-lg flex flex-col items-center justify-center transition-all hover:scale-105 ${getStatusColor(displayTable.status)}`}
-                  style={{
-                    left: `${displayTable.x || 50}px`,
-                    top: `${displayTable.y || 50}px`,
-                    width: `${displayTable.width || 100}px`,
-                    height: `${displayTable.height || 80}px`,
-                    borderRadius: displayTable.shape === 'ROUND' ? '50%' : '8px',
-                    zIndex: draggedTable?.id === table.id ? 1000 : 1,
-                  }}
-                  onMouseDown={(e) => handleMouseDown(e, table)}
-                  onClick={() => setEditingTable(table)}
-                >
-                  <div className="font-bold text-sm">{displayTable.name}</div>
-                  <div className="text-xs">{displayTable.seats} seats</div>
-                  {displayTable.guestCount && displayTable.guestCount > 0 && (
-                    <div className="text-xs mt-1">{displayTable.guestCount} guests</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            <Edit2 className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 text-gray-400 hover:text-red-600 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         </div>
+      </div>
 
-        {/* Table List */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Table List</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Table
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Seats
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Guests
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredTables.map((table) => (
-                  <tr key={table.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">{table.name}</td>
-                    <td className="px-6 py-4 text-gray-600">{table.seats}</td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(table.status)}`}
-                      >
-                        {table.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{table.guestCount || 0}</td>
-                    <td className="px-6 py-4">
-                      {table.status === 'AVAILABLE' && (
-                        <button
-                          onClick={() => updateTableStatus(table.id, 'OCCUPIED')}
-                          className="text-blue-600 hover:text-blue-900 font-medium text-sm"
-                        >
-                          Mark Occupied
-                        </button>
-                      )}
-                      {table.status === 'OCCUPIED' && (
-                        <button
-                          onClick={() => updateTableStatus(table.id, 'AVAILABLE')}
-                          className="text-green-600 hover:text-green-900 font-medium text-sm"
-                        >
-                          Clear Table
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500 flex items-center">
+            <Users className="h-4 w-4 mr-1" />
+            Seats
+          </span>
+          <span className="font-medium text-gray-900">{table.seats}</span>
         </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500">Status</span>
+          <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(table.status)}`}>
+            {table.status}
+          </span>
+        </div>
+      </div>
 
-        {/* Add Table Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">Add New Table</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Table Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newTable.name}
-                    onChange={(e) => setNewTable({ ...newTable, name: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="e.g., Table 1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Seats
-                  </label>
-                  <input
-                    type="number"
-                    value={newTable.seats}
-                    onChange={(e) => setNewTable({ ...newTable, seats: parseInt(e.target.value) })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Area
-                  </label>
-                  <select
-                    value={newTable.areaId}
-                    onChange={(e) => setNewTable({ ...newTable, areaId: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  >
-                    <option value="">Select area</option>
-                    {areas.map((area) => (
-                      <option key={area.id} value={area.id}>
-                        {area.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Shape
-                  </label>
-                  <select
-                    value={newTable.shape}
-                    onChange={(e) => setNewTable({ ...newTable, shape: e.target.value as any })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  >
-                    <option value="RECTANGLE">Rectangle</option>
-                    <option value="SQUARE">Square</option>
-                    <option value="ROUND">Round</option>
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position X
-                    </label>
-                    <input
-                      type="number"
-                      value={newTable.x}
-                      onChange={(e) => setNewTable({ ...newTable, x: parseInt(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position Y
-                    </label>
-                    <input
-                      type="number"
-                      value={newTable.y}
-                      onChange={(e) => setNewTable({ ...newTable, y: parseInt(e.target.value) })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createTable}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-                >
-                  Add Table
-                </button>
-              </div>
+      {table.status === 'OCCUPIED' && (
+        <div className="border-t pt-3 space-y-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500">Guests</span>
+            <span className="font-medium text-gray-900">{table.guestCount}</span>
+          </div>
+          {table.occupiedSince && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500 flex items-center">
+                <Clock className="h-4 w-4 mr-1" />
+                Since
+              </span>
+              <span className="font-medium text-gray-900">{table.occupiedSince}</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
+
+      {table.status === 'OCCUPIED' && (
+        <button
+          onClick={onTransfer}
+          className="mt-3 w-full flex items-center justify-center space-x-2 bg-gray-100 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+        >
+          <ArrowRightLeft className="h-4 w-4" />
+          <span>Transfer</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon, color = 'orange' }: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color?: string;
+}) {
+  const colorClasses = {
+    orange: 'bg-orange-100 text-orange-600',
+    green: 'bg-green-100 text-green-600',
+    blue: 'bg-blue-100 text-blue-600',
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow p-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-500">{label}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        </div>
+        <div className={`p-2 ${colorClasses[color as keyof typeof colorClasses]} rounded-lg`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TableModal({ table, areas, onSave, onClose }: {
+  table: Table | null;
+  areas: Area[];
+  onSave: (data: Partial<Table>) => void;
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    name: table?.name || '',
+    seats: table?.seats || 4,
+    area: table?.area || areas[0].name,
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {table ? 'Edit Table' : 'Add Table'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Table Name
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Number of Seats
+              </label>
+              <input
+                type="number"
+                value={formData.seats}
+                onChange={(e) => setFormData({ ...formData, seats: parseInt(e.target.value) })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                min="1"
+                max="20"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Area
+              </label>
+              <select
+                value={formData.area}
+                onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                {areas.map(area => (
+                  <option key={area.id} value={area.name}>{area.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

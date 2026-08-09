@@ -37,6 +37,20 @@ export const addOrderItemsSchema = z.object({
 export const payOrderSchema = z.object({
   paymentMethod: z.enum(["CASH", "CARD", "MIXED", "GIFT_CARD"]),
   terminalReference: z.string().optional(),
+  cardLast4: z.string().optional(),
+  tipAmount: z.number().nonnegative().optional(),
+  cashTendered: z.number().positive().optional(),
+  giftCardId: z.string().optional(),
+  // For mixed payments
+  payments: z.array(z.object({
+    amount: z.number().positive("Amount must be positive"),
+    paymentMethod: z.enum(["CASH", "CARD", "GIFT_CARD"]),
+    terminalReference: z.string().optional(),
+    cardLast4: z.string().optional(),
+    tipAmount: z.number().nonnegative().optional(),
+    cashTendered: z.number().positive().optional(),
+    giftCardId: z.string().optional(),
+  })).optional(),
 });
 
 export const voidOrderSchema = z.object({
@@ -49,8 +63,28 @@ export const refundOrderSchema = z.object({
   paymentId: z.string().optional(),
 });
 
+export const createOrderSplitSchema = z.object({
+  name: z.string().optional(),
+  amount: z.number().positive("Amount must be positive"),
+  splitType: z.enum(["EQUAL", "CUSTOM", "PER_ITEM", "PERCENTAGE"]),
+  customerId: z.string().optional(),
+});
+
+export const payOrderWithSplitSchema = z.object({
+  splits: z.array(z.object({
+    amount: z.number().positive("Amount must be positive"),
+    paymentMethod: z.enum(["CASH", "CARD", "MIXED", "GIFT_CARD"]),
+    terminalReference: z.string().optional(),
+    cardLast4: z.string().optional(),
+    tipAmount: z.number().nonnegative().optional(),
+    cashTendered: z.number().positive().optional(),
+  })).min(1, "At least one split payment is required"),
+});
+
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 export type AddOrderItemsInput = z.infer<typeof addOrderItemsSchema>;
 export type PayOrderInput = z.infer<typeof payOrderSchema>;
 export type VoidOrderInput = z.infer<typeof voidOrderSchema>;
 export type RefundOrderInput = z.infer<typeof refundOrderSchema>;
+export type CreateOrderSplitInput = z.infer<typeof createOrderSplitSchema>;
+export type PayOrderWithSplitInput = z.infer<typeof payOrderWithSplitSchema>;

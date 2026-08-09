@@ -84,3 +84,19 @@ export function requireRole(...allowedRoles: ("PLATFORM_ADMIN" | "OWNER" | "MANA
     next();
   };
 }
+
+// Middleware for operations that require manager or owner role (void, refund, etc.)
+export function requireManagerRole(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const allowedRoles = ["PLATFORM_ADMIN", "OWNER", "MANAGER"];
+  if (!allowedRoles.includes(req.user.role as any)) {
+    res.status(403).json({ message: "Forbidden: Only managers and owners can perform this action" });
+    return;
+  }
+
+  next();
+}

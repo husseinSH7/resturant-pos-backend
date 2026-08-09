@@ -1,5 +1,8 @@
 import { prisma } from "../../prisma.js";
 import { KitchenStatus } from "@prisma/client";
+import { broadcastToRestaurant } from "../../websocket/index.js";
+import { createAuditLog } from "../../services/audit.service.js";
+import crypto from "crypto";
 
 export async function getTickets(restaurantId: string) {
   const tickets = await prisma.kitchenTicket.findMany({
@@ -12,7 +15,10 @@ export async function getTickets(restaurantId: string) {
       Order: {
         include: {
           table: true,
-          items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+          items: { 
+            include: { product: true, modifiers: true }, 
+            orderBy: { createdAt: "asc" } 
+          },
         },
       },
     },
@@ -22,6 +28,7 @@ export async function getTickets(restaurantId: string) {
     id: t.id,
     status: t.status,
     createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
     order: t.Order
       ? {
           id: t.Order.id,
@@ -33,10 +40,15 @@ export async function getTickets(restaurantId: string) {
             id: item.id,
             quantity: item.quantity,
             product: { name: item.product?.name ?? item.productId },
+            unitPrice: item.unitPrice.toNumber(),
+            notes: item.notes,
             modifiers: item.modifiers.map((m) => ({
+              id: m.id,
               nameSnapshot: m.nameSnapshot,
               priceDelta: m.priceDelta.toNumber(),
             })),
+            // Highlight if item was added after ticket creation
+            isModified: item.createdAt > t.createdAt,
           })),
         }
       : null,
@@ -51,13 +63,30 @@ export async function updateTicketStatus(
 ) {
   const ticket = await prisma.kitchenTicket.findFirst({
     where: { id: ticketId, restaurantId },
+    include: {
+      Order: true,
+    },
   });
 
   if (!ticket) throw new Error("Ticket not found");
 
+  // Validate status transitions
+  const validTransitions: Record<string, string[]> = {
+    PENDING: ["PREPARING"],
+    PREPARING: ["READY"],
+    READY: [], // READY is the final state in current schema
+  };
+
+  const currentStatus = ticket.status as KitchenStatus;
+  const newStatus = status as KitchenStatus;
+
+  if (!validTransitions[currentStatus]?.includes(newStatus)) {
+    throw new Error(`Invalid status transition from ${currentStatus} to ${newStatus}`);
+  }
+
   const updated = await prisma.kitchenTicket.update({
     where: { id: ticketId },
-    data: { status: status as KitchenStatus },
+    data: { status: newStatus, updatedAt: new Date() },
     include: {
       Order: {
         include: {
@@ -68,10 +97,28 @@ export async function updateTicketStatus(
     },
   });
 
+  // Log the status change
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "KITCHEN_TICKET_STATUS_CHANGED",
+    entityType: "KITCHEN_TICKET",
+    entityId: ticketId,
+    details: `Updated kitchen ticket for order #${ticket.Order?.orderNumber} from ${currentStatus} to ${newStatus}`,
+  });
+
+  // Broadcast status update to connected clients
+  broadcastToRestaurant(restaurantId, 'kitchen-ticket-updated', {
+    ticketId: updated.id,
+    status: updated.status,
+    orderNumber: updated.Order?.orderNumber,
+  });
+
   return {
     id: updated.id,
     status: updated.status,
     createdAt: updated.createdAt.toISOString(),
+    updatedAt: updated.updatedAt.toISOString(),
     order: updated.Order
       ? {
           id: updated.Order.id,
@@ -83,10 +130,15 @@ export async function updateTicketStatus(
             id: item.id,
             quantity: item.quantity,
             product: { name: item.product?.name ?? item.productId },
+            unitPrice: item.unitPrice.toNumber(),
+            notes: item.notes,
             modifiers: item.modifiers.map((m) => ({
+              id: m.id,
               nameSnapshot: m.nameSnapshot,
               priceDelta: m.priceDelta.toNumber(),
             })),
+            // Highlight if item was added after ticket creation
+            isModified: item.createdAt > updated.createdAt,
           })),
         }
       : null,

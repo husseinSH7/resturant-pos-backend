@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Plans from './pages/Plans';
 import Billing from './pages/Billing';
 import AuditLogs from './pages/AuditLogs';
+import Restaurants from './pages/Restaurants';
 import { useEffect } from 'react';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -52,6 +53,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AuditLogs />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restaurants"
+          element={
+            <ProtectedRoute>
+              <Restaurants />
             </ProtectedRoute>
           }
         />

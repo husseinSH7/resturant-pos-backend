@@ -1,96 +1,144 @@
 import { prisma } from "../../prisma.js";
+import { Prisma } from "@prisma/client";
 
-export async function getRestaurantSettings(restaurantId: string) {
-  const restaurant = await prisma.restaurant.findUnique({
-    where: { id: restaurantId },
-    include: {
-      tables: true,
-      TableArea: true,
+export async function getSettings(restaurantId: string) {
+  let settings = await prisma.restaurantSettings.findUnique({
+    where: { restaurantId },
+  });
+
+  // Create default settings if not exist
+  if (!settings) {
+    settings = await prisma.restaurantSettings.create({
+      data: {
+        restaurantId,
+        taxRate: new Prisma.Decimal(8),
+        taxIncluded: false,
+        currency: "USD",
+        locale: "en-US",
+        receiptShowCustomerInfo: true,
+        receiptShowServerInfo: true,
+        enableGratuity: false,
+        gratuityRates: [],
+        roundTo: "NONE",
+      },
+    });
+  }
+
+  return {
+    id: settings.id,
+    restaurantId: settings.restaurantId,
+    taxRate: Number(settings.taxRate),
+    taxIncluded: settings.taxIncluded,
+    currency: settings.currency,
+    locale: settings.locale,
+    receiptHeader: settings.receiptHeader,
+    receiptFooter: settings.receiptFooter,
+    receiptShowCustomerInfo: settings.receiptShowCustomerInfo,
+    receiptShowServerInfo: settings.receiptShowServerInfo,
+    enableGratuity: settings.enableGratuity,
+    gratuityRates: settings.gratuityRates,
+    roundTo: settings.roundTo,
+  };
+}
+
+export async function updateSettings(restaurantId: string, data: {
+  taxRate?: number | undefined;
+  taxIncluded?: boolean | undefined;
+  currency?: string | undefined;
+  locale?: string | undefined;
+  receiptHeader?: string | null | undefined;
+  receiptFooter?: string | null | undefined;
+  receiptShowCustomerInfo?: boolean | undefined;
+  receiptShowServerInfo?: boolean | undefined;
+  enableGratuity?: boolean | undefined;
+  gratuityRates?: any[] | undefined;
+  roundTo?: string | undefined;
+}) {
+  const settings = await prisma.restaurantSettings.upsert({
+    where: { restaurantId },
+    create: {
+      restaurantId,
+      taxRate: new Prisma.Decimal(data.taxRate ?? 8),
+      taxIncluded: data.taxIncluded ?? false,
+      currency: data.currency ?? "USD",
+      locale: data.locale ?? "en-US",
+      receiptHeader: data.receiptHeader ?? null,
+      receiptFooter: data.receiptFooter ?? null,
+      receiptShowCustomerInfo: data.receiptShowCustomerInfo ?? true,
+      receiptShowServerInfo: data.receiptShowServerInfo ?? true,
+      enableGratuity: data.enableGratuity ?? false,
+      gratuityRates: data.gratuityRates ?? [],
+      roundTo: (data.roundTo as any) ?? "NONE",
+    },
+    update: {
+      ...(data.taxRate !== undefined && { taxRate: new Prisma.Decimal(data.taxRate) }),
+      ...(data.taxIncluded !== undefined && { taxIncluded: data.taxIncluded }),
+      ...(data.currency !== undefined && { currency: data.currency }),
+      ...(data.locale !== undefined && { locale: data.locale }),
+      ...(data.receiptHeader !== undefined && { receiptHeader: data.receiptHeader }),
+      ...(data.receiptFooter !== undefined && { receiptFooter: data.receiptFooter }),
+      ...(data.receiptShowCustomerInfo !== undefined && { receiptShowCustomerInfo: data.receiptShowCustomerInfo }),
+      ...(data.receiptShowServerInfo !== undefined && { receiptShowServerInfo: data.receiptShowServerInfo }),
+      ...(data.enableGratuity !== undefined && { enableGratuity: data.enableGratuity }),
+      ...(data.gratuityRates !== undefined && { gratuityRates: data.gratuityRates }),
+      ...(data.roundTo !== undefined && { roundTo: data.roundTo as any }),
     },
   });
 
-  if (!restaurant) throw new Error("Restaurant not found");
-
   return {
-    id: restaurant.id,
-    name: restaurant.name,
-    slug: restaurant.slug,
-    address: restaurant.address,
-    phone: restaurant.phone,
-    isActive: restaurant.isActive,
-    tables: restaurant.tables.length,
-    areas: restaurant.TableArea.length,
+    id: settings.id,
+    restaurantId: settings.restaurantId,
+    taxRate: Number(settings.taxRate),
+    taxIncluded: settings.taxIncluded,
+    currency: settings.currency,
+    locale: settings.locale,
+    receiptHeader: settings.receiptHeader,
+    receiptFooter: settings.receiptFooter,
+    receiptShowCustomerInfo: settings.receiptShowCustomerInfo,
+    receiptShowServerInfo: settings.receiptShowServerInfo,
+    enableGratuity: settings.enableGratuity,
+    gratuityRates: settings.gratuityRates,
+    roundTo: settings.roundTo,
   };
 }
 
-export async function updateRestaurantSettings(restaurantId: string, data: {
-  name?: string;
-  address?: string;
-  phone?: string;
-  isActive?: boolean;
-}) {
-  const restaurant = await prisma.restaurant.update({
-    where: { id: restaurantId },
-    data,
-  });
+export async function calculateTax(restaurantId: string, subtotal: number) {
+  const settings = await getSettings(restaurantId);
+  
+  if (settings.taxIncluded) {
+    return {
+      taxAmount: 0,
+      taxRate: settings.taxRate,
+      subtotal,
+      total: subtotal,
+    };
+  }
+
+  const taxAmount = (subtotal * settings.taxRate) / 100;
+  const total = subtotal + taxAmount;
 
   return {
-    id: restaurant.id,
-    name: restaurant.name,
-    address: restaurant.address,
-    phone: restaurant.phone,
-    isActive: restaurant.isActive,
+    taxAmount,
+    taxRate: settings.taxRate,
+    subtotal,
+    total,
   };
 }
 
-export async function getTaxSettings(restaurantId: string) {
-  // In a real implementation, this would fetch from a dedicated TaxSettings table
-  return {
-    taxRate: 0.08, // 8% default
-    taxEnabled: true,
-    taxIncluded: false,
-  };
-}
-
-export async function updateTaxSettings(restaurantId: string, data: {
-  taxRate: number;
-  taxEnabled: boolean;
-  taxIncluded: boolean;
-}) {
-  // In a real implementation, this would update a dedicated TaxSettings table
-  return {
-    taxRate: data.taxRate,
-    taxEnabled: data.taxEnabled,
-    taxIncluded: data.taxIncluded,
-  };
-}
-
-export async function getReceiptSettings(restaurantId: string) {
-  return {
-    showLogo: true,
-    showAddress: true,
-    showPhone: true,
-    showThankYou: true,
-    customMessage: "Thank you for dining with us!",
-    footerText: "Visit us again soon!",
-  };
-}
-
-export async function updateReceiptSettings(restaurantId: string, data: {
-  showLogo?: boolean;
-  showAddress?: boolean;
-  showPhone?: boolean;
-  showThankYou?: boolean;
-  customMessage?: string;
-  footerText?: string;
-}) {
-  // In a real implementation, this would update a dedicated ReceiptSettings table
-  return {
-    showLogo: data.showLogo ?? true,
-    showAddress: data.showAddress ?? true,
-    showPhone: data.showPhone ?? true,
-    showThankYou: data.showThankYou ?? true,
-    customMessage: data.customMessage || "Thank you for dining with us!",
-    footerText: data.footerText || "Visit us again soon!",
-  };
+export async function roundAmount(restaurantId: string, amount: number) {
+  const settings = await getSettings(restaurantId);
+  
+  switch (settings.roundTo) {
+    case "NEAREST_0_05":
+      return Math.round(amount * 20) / 20;
+    case "NEAREST_0_10":
+      return Math.round(amount * 10) / 10;
+    case "NEAREST_0_50":
+      return Math.round(amount * 2) / 2;
+    case "NEAREST_1":
+      return Math.round(amount);
+    case "NONE":
+    default:
+      return amount;
+  }
 }

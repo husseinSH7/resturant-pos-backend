@@ -1,207 +1,169 @@
-import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import Inventory from './pages/Inventory'
-import Reservations from './pages/Reservations'
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom'
 import Analytics from './pages/Analytics'
 import Staff from './pages/Staff'
-import Settings from './pages/Settings'
 import Tables from './pages/Tables'
-import Admin from './pages/Admin'
-import Login from './pages/Login'
-import Menu from './pages/Menu'
-import { useKeyboardShortcuts, commonShortcuts } from './hooks/useKeyboardShortcuts'
-import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp'
+import Settings from './pages/Settings'
+import Customers from './pages/Customers'
+import Marketing from './pages/Marketing'
+import Devices from './pages/Devices'
+import Inventory from './pages/Inventory'
+import Reservations from './pages/Reservations'
+import { useTheme } from './hooks/useTheme'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const token = localStorage.getItem('owner_token');
-  return token ? <>{children}</> : <Navigate to="/login" />;
-}
-
-function AppContent() {
+function App() {
   const location = useLocation();
-  const [showShortcuts, setShowShortcuts] = useState(false);
-
-  useKeyboardShortcuts([
-    ...commonShortcuts,
-    { key: '?', action: () => setShowShortcuts(!showShortcuts), description: 'Show shortcuts' },
-  ]);
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Skip to main content for accessibility */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-orange-600 text-white px-4 py-2 rounded-lg z-50"
-      >
-        Skip to main content
-      </a>
+    <Router>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+        {/* Mobile menu button */}
+        <div className="lg:hidden fixed top-4 right-4 z-50">
+          <button
+            onClick={() => document.getElementById('mobile-menu')?.classList.toggle('hidden')}
+            className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-md"
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6 text-gray-900 dark:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
 
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b border-gray-200" role="navigation" aria-label="Main navigation">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-bold text-gray-900">Restaurant POS Dashboard</h1>
+        {/* Navigation */}
+        <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between h-16">
+              <div className="flex">
+                <div className="flex-shrink-0 flex items-center">
+                  <h1 className="text-xl font-bold text-gray-900 dark:text-white">Restaurant POS Dashboard</h1>
+                </div>
+                <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                  <Link
+                    to="/"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Analytics
+                  </Link>
+                  <Link
+                    to="/staff"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/staff' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Staff
+                  </Link>
+                  <Link
+                    to="/tables"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/tables' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Tables
+                  </Link>
+                  <Link
+                    to="/customers"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/customers' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Customers
+                  </Link>
+                  <Link
+                    to="/marketing"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/marketing' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Marketing
+                  </Link>
+                  <Link
+                    to="/devices"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/devices' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Devices
+                  </Link>
+                  <Link
+                    to="/inventory"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/inventory' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Inventory
+                  </Link>
+                  <Link
+                    to="/reservations"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/reservations' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Reservations
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                      location.pathname === '/settings' ? 'text-orange-600 dark:text-orange-400 border-b-2 border-orange-600 dark:border-orange-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                  >
+                    Settings
+                  </Link>
+                </div>
               </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link
-                  to="/"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/' ? 'page' : undefined}
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  aria-label="Toggle theme"
                 >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/analytics"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/analytics' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/analytics' ? 'page' : undefined}
-                >
-                  Analytics
-                </Link>
-                <Link
-                  to="/tables"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/tables' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/tables' ? 'page' : undefined}
-                >
-                  Tables
-                </Link>
-                <Link
-                  to="/inventory"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/inventory' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/inventory' ? 'page' : undefined}
-                >
-                  Inventory
-                </Link>
-                <Link
-                  to="/reservations"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/reservations' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/reservations' ? 'page' : undefined}
-                >
-                  Reservations
-                </Link>
-                <Link
-                  to="/staff"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/staff' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/staff' ? 'page' : undefined}
-                >
-                  Staff
-                </Link>
-                <Link
-                  to="/settings"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/settings' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/settings' ? 'page' : undefined}
-                >
-                  Settings
-                </Link>
-                <Link
-                  to="/menu"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/menu' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/menu' ? 'page' : undefined}
-                >
-                  Menu
-                </Link>
-                <Link
-                  to="/admin"
-                  className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 rounded ${
-                    location.pathname === '/admin' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  aria-current={location.pathname === '/admin' ? 'page' : undefined}
-                >
-                  Admin
-                </Link>
+                  {theme === 'dark' ? (
+                    <svg className="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg className="w-5 h-5 text-gray-700" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
           </div>
+        </nav>
+
+        {/* Mobile Menu */}
+        <div id="mobile-menu" className="hidden lg:hidden bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <div className="px-4 py-3 space-y-2">
+            <Link to="/" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Analytics</Link>
+            <Link to="/staff" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Staff</Link>
+            <Link to="/tables" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Tables</Link>
+            <Link to="/customers" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Customers</Link>
+            <Link to="/marketing" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Marketing</Link>
+            <Link to="/devices" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Devices</Link>
+            <Link to="/inventory" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Inventory</Link>
+            <Link to="/reservations" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Reservations</Link>
+            <Link to="/settings" className="block px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Settings</Link>
+          </div>
         </div>
-      </nav>
 
-      {/* Main Content */}
-      <main id="main-content" className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8" role="main">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <div className="text-center py-12">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Welcome to Restaurant POS Dashboard</h2>
-                <p className="text-gray-600">Select a module from the navigation above to get started.</p>
-              </div>
-            </ProtectedRoute>
-          } />
-          <Route path="/analytics" element={
-            <ProtectedRoute>
-              <Analytics />
-            </ProtectedRoute>
-          } />
-          <Route path="/tables" element={
-            <ProtectedRoute>
-              <Tables />
-            </ProtectedRoute>
-          } />
-          <Route path="/inventory" element={
-            <ProtectedRoute>
-              <Inventory />
-            </ProtectedRoute>
-          } />
-          <Route path="/reservations" element={
-            <ProtectedRoute>
-              <Reservations />
-            </ProtectedRoute>
-          } />
-          <Route path="/staff" element={
-            <ProtectedRoute>
-              <Staff />
-            </ProtectedRoute>
-          } />
-          <Route path="/menu" element={
-            <ProtectedRoute>
-              <Menu />
-            </ProtectedRoute>
-          } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <Admin />
-            </ProtectedRoute>
-          } />
-        </Routes>
-      </main>
-
-      {/* Keyboard Shortcuts Help */}
-      {showShortcuts && (
-        <KeyboardShortcutsHelp
-          shortcuts={commonShortcuts}
-          onClose={() => setShowShortcuts(false)}
-        />
-      )}
-    </div>
-  )
-}
-
-function App() {
-  return (
-    <Router>
-      <AppContent />
+        {/* Main Content */}
+        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+          <Routes>
+            <Route path="/" element={<Analytics />} />
+            <Route path="/staff" element={<Staff />} />
+            <Route path="/tables" element={<Tables />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/marketing" element={<Marketing />} />
+            <Route path="/devices" element={<Devices />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/reservations" element={<Reservations />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </main>
+      </div>
     </Router>
   )
 }

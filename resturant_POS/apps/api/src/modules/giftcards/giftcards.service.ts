@@ -1,5 +1,7 @@
 import { prisma } from "../../prisma.js";
 import { Prisma } from "@prisma/client";
+import crypto from "crypto";
+import { createAuditLog } from "../../services/audit.service.js";
 
 export async function getGiftCards(restaurantId: string) {
   const giftCards = await prisma.giftCard.findMany({
@@ -80,7 +82,7 @@ export async function getGiftCardByNumber(restaurantId: string, cardNumber: stri
   };
 }
 
-export async function useGiftCard(restaurantId: string, cardNumber: string, amount: number) {
+export async function useGiftCard(restaurantId: string, cardNumber: string, amount: number, orderId?: string, userId?: string) {
   const giftCard = await prisma.giftCard.findFirst({
     where: { restaurantId, cardNumber },
   });
@@ -97,6 +99,17 @@ export async function useGiftCard(restaurantId: string, cardNumber: string, amou
     },
   });
 
+  if (userId) {
+    await createAuditLog({
+      restaurantId,
+      userId,
+      action: "GIFT_CARD_USED",
+      entityType: "GIFT_CARD",
+      entityId: giftCard.id,
+      details: `Used $${amount} from gift card ${cardNumber}${orderId ? ` for order ${orderId}` : ''}`,
+    });
+  }
+
   return {
     id: updated.id,
     cardNumber: updated.cardNumber,
@@ -105,7 +118,7 @@ export async function useGiftCard(restaurantId: string, cardNumber: string, amou
   };
 }
 
-export async function reloadGiftCard(restaurantId: string, cardNumber: string, amount: number) {
+export async function reloadGiftCard(restaurantId: string, cardNumber: string, amount: number, userId?: string) {
   const giftCard = await prisma.giftCard.findFirst({
     where: { restaurantId, cardNumber },
   });
@@ -120,6 +133,17 @@ export async function reloadGiftCard(restaurantId: string, cardNumber: string, a
       initialAmount: { increment: amount },
     },
   });
+
+  if (userId) {
+    await createAuditLog({
+      restaurantId,
+      userId,
+      action: "GIFT_CARD_RELOADED",
+      entityType: "GIFT_CARD",
+      entityId: giftCard.id,
+      details: `Reloaded $${amount} to gift card ${cardNumber}`,
+    });
+  }
 
   return {
     id: updated.id,

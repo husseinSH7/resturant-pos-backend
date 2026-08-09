@@ -171,53 +171,96 @@ Close the gaps vs Toast/Square that were flagged in `roadmap.md`.
 
 ---
 
-## Phase 8 — Mobile App Polish & Native Builds (weeks 17–18)
+## Phase 8 — Restaurant Dashboard Core Features (weeks 17–19)
+
+Complete the restaurant owner dashboard with essential management features.
+
+| Deliverable | Details |
+|---|---|
+| Analytics Dashboard | Sales overview, daily/weekly/monthly charts, top items, server performance, real-time metrics |
+| Staff Management | Staff CRUD, role assignment, PIN management, performance dashboard, shift scheduling |
+| Tables Management | Visual table layout, drag-and-drop arrangement, table configuration (seats, areas), transfer/merge tables |
+| Settings Page | Tax rates, receipt customization, printer settings, business profile, operating hours |
+| Customer/Loyalty View | Customer list, loyalty tiers, points history, customer analytics |
+
+**UI:** Recharts/tanstack charts for analytics, data tables for staff/tables, form components for settings.  
+**Milestone:** Restaurant owner can fully manage their business from the dashboard.
+
+---
+
+## Phase 9 — Advanced Features & Mobile Enhancements (weeks 20–22)
+
+Add advanced business features and enhance mobile app capabilities.
+
+| Deliverable | Details |
+|---|---|
+| Gift Cards | Dashboard: create/manage gift cards, reload, transaction history. Mobile: redeem gift cards in payment |
+| Marketing Campaigns | Campaign composer, SMS/email templates, customer targeting, campaign analytics |
+| Inventory in Mobile | Stock level checking, low stock alerts, ingredient viewing for staff |
+| Device Management | Device registration, list active devices, device types (POS/KDS/Manager), last seen tracking |
+| Advanced Reporting | Export CSV/PDF, custom date ranges, peak-hour analysis, sales by category/server |
+| Super Admin Restaurant Creation | Form to create restaurants, assign owners, select plans, set initial limits |
+
+**UI:** Campaign composer with template editor, export buttons, device management table, restaurant creation wizard.  
+**Milestone:** All backend features have corresponding frontend implementations.
+
+---
+
+## Phase 10 — Design Polish & UI/UX Improvements (weeks 23–24)
+
+Elevate the visual design and user experience across all applications.
+
+| Deliverable | Details |
+|---|---|
+| Visual Floor Plan Editor | Drag-and-drop tables, shapes, rotation, areas, save/load layouts |
+| Component Library | Shared UI components (buttons, inputs, cards, modals) with consistent styling |
+| Responsive Design | Mobile-first approach, tablet optimization, desktop layouts |
+| Loading States | Skeleton screens, loading spinners, optimistic UI updates |
+| Error Handling | Error boundaries, user-friendly error messages, retry mechanisms |
+| Accessibility | ARIA labels, keyboard navigation, screen reader support |
+| Dark Mode | Theme switching, consistent dark mode across all apps |
+
+**UI:** shadcn/ui component library, Tailwind CSS theming, Framer Motion animations.  
+**Milestone:** Professional, polished user experience across all interfaces.
+
+---
+
+## Phase 11 — Mobile App Polish & Native Builds (weeks 25–26)
 
 Make the mobile app ready for Play Store / App Store and real devices.
 
 | Deliverable | Details |
 |---|---|
-| Native UI | Replace Expo-web workarounds (`Modal`, `ScrollView`) with React Native components that work on iOS/Android. |
-| Secure storage | Use `expo-secure-store` for tokens and PIN. |
-| Native offline SQLite | Fix `wa-sqlite` web fallback; ensure native SQLite works. |
-| Push notifications | Order status, kitchen ready, shift reminders. |
-| Printing & peripherals | Receipt/kitchen printer, cash drawer, barcode scanner integration. |
-| EAS builds | `eas build --platform ios/android`, app store metadata. |
+| Secure storage | Use `expo-secure-store` for tokens and PIN |
+| Native offline SQLite | Ensure native SQLite works properly |
+| Push notifications | Order status, kitchen ready, shift reminders |
+| Printing & peripherals | Receipt/kitchen printer, cash drawer, barcode scanner integration |
+| EAS builds | `eas build --platform ios/android`, app store metadata |
+| App store submission | iOS App Store and Google Play Store submission |
 
 **Milestone:** Production `.apk` / `.ipa` build succeeds and installs on a real device.
 
 ---
 
-## Phase 9 — Testing, CI/CD & Observability (weeks 19–20)
+## Phase 12 — Testing, CI/CD & Production Launch (weeks 27–29)
 
-Make the system production-grade.
-
-| Deliverable | Details |
-|---|---|
-| Backend tests | Vitest/Jest unit tests; Supertest integration tests for every route. |
-| Dashboard E2E | Playwright coverage for owner/super-admin flows. |
-| Mobile E2E | Maestro or Detox for login/order/payment. |
-| CI/CD | GitHub Actions: lint, typecheck, test, build, deploy. |
-| Monitoring | Sentry for errors, Datadog/Logtail for logs, health checks. |
-| Backup & DR | Automated DB backups, point-in-time restore, Redis persistence. |
-| Load testing | 100+ concurrent users, 99.9% uptime target. |
-
-**Milestone:** All critical paths have automated tests; CI passes green.
-
----
-
-## Phase 10 — Production Launch (weeks 21–22)
-
-Ship and support.
+Make the system production-ready and deploy to production.
 
 | Deliverable | Details |
 |---|---|
-| Hosting | Fly.io/Railway/Render for API; Vercel/Netlify for dashboards; CloudFront/S3 for assets. |
-| SSL / CDN / WAF | HTTPS everywhere, Cloudflare, API gateway with rate limits. |
-| Compliance | PCI-DSS scope reduction (no card data), GDPR deletion flows, SOC 2 prep. |
-| Documentation | Owner guides, staff quick-start, API docs. |
-| Pilot program | 3–5 beta restaurants, feedback loop. |
-| Support system | Help desk, in-app feedback. |
+| Backend tests | Vitest/Jest unit tests; Supertest integration tests for every route |
+| Dashboard E2E | Playwright coverage for owner/super-admin flows |
+| Mobile E2E | Maestro or Detox for login/order/payment |
+| CI/CD | GitHub Actions: lint, typecheck, test, build, deploy |
+| Monitoring | Sentry for errors, Datadog/Logtail for logs, health checks |
+| Backup & DR | Automated DB backups, point-in-time restore, Redis persistence |
+| Load testing | 100+ concurrent users, 99.9% uptime target |
+| Hosting | Fly.io/Railway/Render for API; Vercel/Netlify for dashboards; CloudFront/S3 for assets |
+| SSL / CDN / WAF | HTTPS everywhere, Cloudflare, API gateway with rate limits |
+| Compliance | PCI-DSS scope reduction (no card data), GDPR deletion flows, SOC 2 prep |
+| Documentation | Owner guides, staff quick-start, API docs |
+| Pilot program | 3–5 beta restaurants, feedback loop |
+| Support system | Help desk, in-app feedback |
 
 **Milestone:** Public launch with first paying restaurants.
 
@@ -227,10 +270,11 @@ Ship and support.
 
 - **MVP production-ready SaaS:** ~10 weeks (Phases 1–5)  
 - **Full feature parity + advanced:** ~16 weeks (Phases 1–7)  
-- **Store-ready mobile + production launch:** ~22 weeks (all phases)
+- **Complete dashboard features:** ~22 weeks (Phases 1–9)  
+- **Production-ready system:** ~29 weeks (all phases)
 
 ---
 
 ## Critical next step
 
-**Start with Phase 1 (Security & Auth Foundation).** Do not build the super-admin dashboard or tenant model until PINs are hashed, RBAC is enforced, and the API is not wide open. The smoke test already confirmed the mobile golden path works, so the priority is hardening and the SaaS layer, not new POS features.
+**Start with Phase 8 (Restaurant Dashboard Core Features).** The backend is complete and the mobile app has basic POS functionality. Focus on completing the restaurant owner dashboard with analytics, staff management, tables, and settings to provide full business management capabilities.

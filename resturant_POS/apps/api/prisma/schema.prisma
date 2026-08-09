@@ -93,6 +93,28 @@ model Restaurant {
   Reservation   Reservation[]
   WaitlistEntry WaitlistEntry[]
   AuditLog      AuditLog[]
+  settings      RestaurantSettings?
+}
+
+model RestaurantSettings {
+  id                String   @id @default(uuid())
+  restaurantId      String   @unique
+  taxRate           Decimal  @default(8) @db.Decimal(5, 2)
+  taxIncluded       Boolean  @default(false)
+  currency          String   @default("USD")
+  locale            String   @default("en-US")
+  receiptHeader     String?
+  receiptFooter     String?
+  receiptShowCustomerInfo Boolean @default(true)
+  receiptShowServerInfo   Boolean @default(true)
+  enableGratuity    Boolean  @default(false)
+  gratuityRates     Json     @default("[]")
+  roundTo           String   @default("NONE")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([restaurantId])
 }
 
 model User {
@@ -104,6 +126,11 @@ model User {
   passwordHash String?
   role         UserRole
   isActive     Boolean    @default(true)
+  emailVerified          Boolean  @default(false)
+  emailVerificationToken String?
+  emailVerificationExpiry DateTime?
+  passwordResetToken     String?
+  passwordResetExpiry    DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   orders       Order[]
@@ -115,6 +142,19 @@ model User {
 
   @@index([restaurantId])
   @@index([restaurantId, role])
+  @@index([email])
+}
+
+model OwnerInvite {
+  id             String    @id @default(cuid())
+  email          String
+  restaurantName String
+  token          String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([token])
   @@index([email])
 }
 
@@ -243,6 +283,7 @@ model Customer {
   GiftCard     GiftCard[]
   Reservation  Reservation[]
   WaitlistEntry WaitlistEntry[]
+  orderSplits  OrderSplit[]
 
   @@index([restaurantId])
   @@index([restaurantId, email])
@@ -274,6 +315,7 @@ model Order {
   user              User           @relation(fields: [userId], references: [id])
   items             OrderItem[]
   Payment           Payment[]
+  orderSplits       OrderSplit[]
 
   @@unique([restaurantId, orderNumber])
   @@index([restaurantId])
@@ -311,6 +353,36 @@ model OrderItemModifier {
 
   @@index([orderItemId])
   @@index([modifierOptionId])
+}
+
+model OrderSplit {
+  id                String          @id @default(uuid())
+  orderId           String
+  name              String          @default("Split")
+  amount            Decimal         @db.Decimal(10, 2)
+  splitType         SplitType       @default(CUSTOM)
+  customerId        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer          Customer?       @relation(fields: [customerId], references: [id])
+  paymentSplits     PaymentSplit[]
+
+  @@index([orderId])
+  @@index([customerId])
+}
+
+model PaymentSplit {
+  id              String      @id @default(uuid())
+  orderSplitId    String
+  paymentId       String
+  amount          Decimal     @db.Decimal(10, 2)
+  createdAt       DateTime   @default(now())
+  orderSplit      OrderSplit  @relation(fields: [orderSplitId], references: [id], onDelete: Cascade)
+  payment         Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([orderSplitId])
+  @@index([paymentId])
 }
 
 model Refund {
@@ -388,6 +460,7 @@ model Payment {
   Restaurant        Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   User              User          @relation(fields: [userId], references: [id])
   Refund            Refund[]
+  paymentSplits     PaymentSplit[]
   GiftCard          GiftCard?     @relation(fields: [giftCardId], references: [id])
 
   @@index([orderId])
@@ -670,6 +743,13 @@ enum WaitlistStatus {
   CALLED
   SEATED
   CANCELLED
+}
+
+enum SplitType {
+  EQUAL
+  CUSTOM
+  PER_ITEM
+  PERCENTAGE
 }
 
 model AuditLog {

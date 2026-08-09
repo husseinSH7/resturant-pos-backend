@@ -1,5 +1,6 @@
 import { prisma } from "../../prisma.js";
 import { TableStatus, OrderStatus, Prisma } from "@prisma/client";
+import crypto from "crypto";
 
 export async function getTables(restaurantId: string) {
   const tables = await prisma.table.findMany({
@@ -16,7 +17,7 @@ export async function getTables(restaurantId: string) {
 
 export async function createTable(
   restaurantId: string,
-  data: { name: string; seats?: number; area?: string; shape?: string; x?: number; y?: number }
+  data: { name: string; seats?: number; area?: string; shape?: string; x?: number; y?: number; width?: number; height?: number; rotation?: number }
 ) {
   const areaRecord = data.area
     ? await prisma.tableArea.upsert({
@@ -28,6 +29,7 @@ export async function createTable(
 
   const table = await prisma.table.create({
     data: {
+      id: crypto.randomUUID(),
       restaurantId,
       name: data.name,
       seats: data.seats ?? 4,
@@ -35,12 +37,83 @@ export async function createTable(
       shape: normalizeShape(data.shape),
       x: data.x ?? 0,
       y: data.y ?? 0,
+      width: data.width ?? 80,
+      height: data.height ?? 80,
+      rotation: data.rotation ?? 0,
       status: TableStatus.AVAILABLE,
     },
     include: { orders: { where: { status: OrderStatus.OPEN }, take: 1 }, TableArea: true },
   });
 
   return mapTable(table);
+}
+
+export async function updateTablePosition(
+  restaurantId: string,
+  tableId: string,
+  data: { x?: number; y?: number; width?: number; height?: number; rotation?: number }
+) {
+  const table = await prisma.table.findFirst({
+    where: { id: tableId, restaurantId },
+  });
+
+  if (!table) throw new Error("Table not found");
+
+  const updated = await prisma.table.update({
+    where: { id: tableId },
+    data: {
+      ...(data.x !== undefined && { x: data.x }),
+      ...(data.y !== undefined && { y: data.y }),
+      ...(data.width !== undefined && { width: data.width }),
+      ...(data.height !== undefined && { height: data.height }),
+      ...(data.rotation !== undefined && { rotation: data.rotation }),
+    },
+    include: { TableArea: true },
+  });
+
+  return mapTable(updated);
+}
+
+export async function updateTable(
+  restaurantId: string,
+  tableId: string,
+  data: { name?: string; seats?: number; areaId?: string; shape?: string; isActive?: boolean }
+) {
+  const table = await prisma.table.findFirst({
+    where: { id: tableId, restaurantId },
+  });
+
+  if (!table) throw new Error("Table not found");
+
+  const updated = await prisma.table.update({
+    where: { id: tableId },
+    data: {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.seats !== undefined && { seats: data.seats }),
+      ...(data.areaId !== undefined && { areaId: data.areaId }),
+      ...(data.shape !== undefined && { shape: normalizeShape(data.shape) }),
+      ...(data.isActive !== undefined && { isActive: data.isActive }),
+    },
+    include: { TableArea: true },
+  });
+
+  return mapTable(updated);
+}
+
+export async function deleteTable(restaurantId: string, tableId: string) {
+  const table = await prisma.table.findFirst({
+    where: { id: tableId, restaurantId },
+    include: { orders: { where: { status: OrderStatus.OPEN } } },
+  });
+
+  if (!table) throw new Error("Table not found");
+  if (table.orders.length > 0) throw new Error("Cannot delete table with open orders");
+
+  await prisma.table.delete({
+    where: { id: tableId },
+  });
+
+  return { success: true };
 }
 
 export async function transferTable(
@@ -151,6 +224,9 @@ function mapTable(t: any) {
     shape: t.shape,
     x: t.x,
     y: t.y,
+    width: t.width,
+    height: t.height,
+    rotation: t.rotation,
     status: t.status,
     isActive: t.isActive,
     hasOpenOrder: !!openOrderId,

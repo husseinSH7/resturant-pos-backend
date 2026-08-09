@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { prisma } from "../../prisma.js";
 import { createAuditLog } from "../../services/audit.service.js";
+import { SubscriptionStatus } from "@prisma/client";
+import { sendPasswordResetEmail, sendEmailVerificationEmail, sendOwnerInviteEmail } from "../../services/email.service.js";
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET;
@@ -214,40 +216,99 @@ export async function forgotPassword(email: string) {
   const resetToken = crypto.randomBytes(32).toString('hex');
   const resetTokenExpiry = new Date(Date.now() + 3600000); // 1 hour from now
 
-  // Store reset token - in production, use a separate passwordReset table
-  // For now, we'll log it for development
-  console.log(`Password reset token for ${email}: ${resetToken}`);
-  
-  // TODO: Send email with reset link using a transactional email service
+  // Store reset token in database
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetToken: resetToken,
+      passwordResetExpiry: resetTokenExpiry,
+    },
+  });
+
+  // Send email with reset link
+  await sendPasswordResetEmail(email, resetToken);
   
   return { 
     message: "If the email exists, a reset link has been sent",
-    resetToken // Only for development - remove in production
   };
 }
 
 export async function resetPassword(token: string, newPassword: string) {
-  // In production, validate the token from a password reset table
-  // For now, this is a simplified version that requires proper implementation
-  
-  // TODO: Implement proper token validation and password update
-  // This requires adding passwordResetToken and passwordResetExpiry fields to the User model
-  
+  const user = await prisma.user.findFirst({
+    where: {
+      passwordResetToken: token,
+      passwordResetExpiry: {
+        gt: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("Invalid or expired reset token");
+  }
+
   const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
-  
-  // Placeholder - needs proper token storage implementation
-  throw new Error("Password reset functionality requires proper token storage implementation in the database schema");
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: hashedPassword,
+      passwordResetToken: null,
+      passwordResetExpiry: null,
+    },
+  });
+
+  // Log the password reset for audit purposes
+  if (user.restaurantId) {
+    await createAuditLog({
+      restaurantId: user.restaurantId,
+      userId: user.id,
+      action: "PASSWORD_RESET",
+      entityType: "USER",
+      entityId: user.id,
+      details: `User ${user.fullName} reset their password`,
+    });
+  }
+
+  return { message: "Password reset successfully" };
 }
 
 export async function verifyEmail(token: string) {
-  // In production, validate the verification token and mark user as verified
-  // This requires adding emailVerified and emailVerificationToken fields to the User model
-  
-  // TODO: Implement proper email verification
-  console.log(`Email verification token: ${token}`);
-  
-  // Placeholder - needs proper token storage implementation
-  throw new Error("Email verification functionality requires proper token storage implementation in the database schema");
+  const user = await prisma.user.findFirst({
+    where: {
+      emailVerificationToken: token,
+      emailVerificationExpiry: {
+        gt: new Date(),
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("Invalid or expired verification token");
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationExpiry: null,
+    },
+  });
+
+  // Log the email verification for audit purposes
+  if (user.restaurantId) {
+    await createAuditLog({
+      restaurantId: user.restaurantId,
+      userId: user.id,
+      action: "EMAIL_VERIFIED",
+      entityType: "USER",
+      entityId: user.id,
+      details: `User ${user.fullName} verified their email`,
+    });
+  }
+
+  return { message: "Email verified successfully" };
 }
 
 export async function resendVerificationEmail(email: string) {
@@ -259,45 +320,168 @@ export async function resendVerificationEmail(email: string) {
     return { message: "If the email exists, a verification link has been sent" };
   }
 
+  if (user.emailVerified) {
+    return { message: "Email is already verified" };
+  }
+
   // Generate verification token
   const verificationToken = crypto.randomBytes(32).toString('hex');
-  
-  // TODO: Store token and send email
-  console.log(`Verification token for ${email}: ${verificationToken}`);
+  const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+
+  // Store token in database
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      emailVerificationToken: verificationToken,
+      emailVerificationExpiry: verificationExpiry,
+    },
+  });
+
+  // Send email with verification link
+  await sendEmailVerificationEmail(email, verificationToken);
   
   return { 
     message: "If the email exists, a verification link has been sent",
-    verificationToken // Only for development
   };
 }
 
 export async function createOwnerInvite(email: string, restaurantName: string) {
+  // Check if user already exists with this email
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (existingUser) {
+    throw new Error("A user with this email already exists");
+  }
+
   // Generate invite token
   const inviteToken = crypto.randomBytes(32).toString('hex');
   const inviteExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
 
-  // TODO: Store invite in database with email, token, expiry, restaurantName
-  // For now, log for development
-  console.log(`Owner invite token for ${email} (${restaurantName}): ${inviteToken}`);
-  console.log(`Expires: ${inviteExpiry.toISOString()}`);
+  // Store invite in database
+  const invite = await prisma.ownerInvite.create({
+    data: {
+      email,
+      restaurantName,
+      token: inviteToken,
+      expiresAt: inviteExpiry,
+    },
+  });
 
   const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invite?token=${inviteToken}`;
 
-  // TODO: Send email with invite link
+  // Send email with invite link
+  await sendOwnerInviteEmail(email, restaurantName, inviteToken);
 
   return {
     message: "Invite created successfully",
     inviteLink,
-    inviteToken, // Only for development
-    expiresAt: inviteExpiry,
+    expiresAt: invite.expiresAt,
   };
 }
 
 export async function acceptOwnerInvite(token: string, password: string, fullName: string) {
-  // TODO: Validate invite token from database
-  // Check if token exists, is not expired, and hasn't been used
-  // Get email and restaurantName from invite record
+  // Validate invite token from database
+  const invite = await prisma.ownerInvite.findUnique({
+    where: { token },
+  });
 
-  // For now, this is a placeholder
-  throw new Error("Owner invite acceptance requires proper invite storage implementation in the database schema");
+  if (!invite) {
+    throw new Error("Invalid invite token");
+  }
+
+  if (invite.expiresAt < new Date()) {
+    throw new Error("Invite token has expired");
+  }
+
+  if (invite.acceptedAt) {
+    throw new Error("Invite has already been accepted");
+  }
+
+  // Check if user already exists with this email
+  const existingUser = await prisma.user.findUnique({
+    where: { email: invite.email },
+  });
+
+  if (existingUser) {
+    throw new Error("A user with this email already exists");
+  }
+
+  // Hash the password
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+
+  // Create the restaurant first
+  const restaurant = await prisma.restaurant.create({
+    data: {
+      name: invite.restaurantName,
+      slug: invite.restaurantName.toLowerCase().replace(/\s+/g, '-'),
+      isActive: true,
+    },
+  });
+
+  // Create default subscription (trial)
+  const defaultPlan = await prisma.plan.findFirst({
+    where: { isActive: true },
+    orderBy: { basePrice: 'asc' },
+  });
+
+  if (defaultPlan) {
+    await prisma.subscription.create({
+      data: {
+        restaurantId: restaurant.id,
+        planId: defaultPlan.id,
+        status: SubscriptionStatus.TRIAL,
+        trialUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days trial
+      },
+    });
+  }
+
+  // Create the owner user
+  const user = await prisma.user.create({
+    data: {
+      restaurantId: restaurant.id,
+      fullName,
+      email: invite.email,
+      passwordHash,
+      role: "OWNER",
+      isActive: true,
+      emailVerified: true, // Auto-verify since they came from an invite
+    },
+  });
+
+  // Mark invite as accepted
+  await prisma.ownerInvite.update({
+    where: { id: invite.id },
+    data: { acceptedAt: new Date() },
+  });
+
+  // Generate tokens for automatic login
+  const tokens = await generateTokens(user.id, restaurant.id, user.role);
+
+  // Log the owner creation for audit purposes
+  await createAuditLog({
+    restaurantId: restaurant.id,
+    userId: user.id,
+    action: "OWNER_CREATED",
+    entityType: "USER",
+    entityId: user.id,
+    details: `Owner ${user.fullName} created via invite acceptance`,
+  });
+
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    user: {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+    },
+    restaurant: {
+      id: restaurant.id,
+      name: restaurant.name,
+      slug: restaurant.slug,
+    },
+  };
 }

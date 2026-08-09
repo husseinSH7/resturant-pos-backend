@@ -1,309 +1,411 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { Plus, Pencil, Trash2, Search, MoreVertical, UserPlus, Clock, DollarSign, Star } from 'lucide-react';
 
-interface StaffMember {
+interface Staff {
   id: string;
-  fullName: string;
+  name: string;
   email: string;
-  role: string;
-  pin: string | null;
+  role: 'MANAGER' | 'CASHIER' | 'KITCHEN';
+  pin: string;
   isActive: boolean;
-  createdAt: string;
-}
-
-interface StaffPerformance {
-  staffId: string;
-  staffName: string;
-  totalOrders: number;
-  totalRevenue: number;
-  averageOrderValue: number;
+  ordersToday: number;
+  revenueToday: number;
+  rating: number;
+  shiftStart?: string;
 }
 
 export default function Staff() {
-  const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [performance, setPerformance] = useState<StaffPerformance[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newStaff, setNewStaff] = useState({
-    fullName: '',
-    email: '',
-    role: 'CASHIER',
-    pin: '',
-    password: '',
-  });
+  const [showModal, setShowModal] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
+  // Mock data - replace with actual API calls
   useEffect(() => {
-    loadStaff();
-    loadPerformance();
+    setTimeout(() => {
+      setStaff([
+        {
+          id: '1',
+          name: 'John Smith',
+          email: 'john@restaurant.com',
+          role: 'MANAGER',
+          pin: '1234',
+          isActive: true,
+          ordersToday: 45,
+          revenueToday: 4500,
+          rating: 4.8,
+          shiftStart: '09:00',
+        },
+        {
+          id: '2',
+          name: 'Sarah Johnson',
+          email: 'sarah@restaurant.com',
+          role: 'CASHIER',
+          pin: '2345',
+          isActive: true,
+          ordersToday: 38,
+          revenueToday: 3800,
+          rating: 4.9,
+          shiftStart: '10:00',
+        },
+        {
+          id: '3',
+          name: 'Mike Williams',
+          email: 'mike@restaurant.com',
+          role: 'KITCHEN',
+          pin: '3456',
+          isActive: true,
+          ordersToday: 0,
+          revenueToday: 0,
+          rating: 4.7,
+          shiftStart: '08:30',
+        },
+        {
+          id: '4',
+          name: 'Emma Davis',
+          email: 'emma@restaurant.com',
+          role: 'CASHIER',
+          pin: '4567',
+          isActive: false,
+          ordersToday: 0,
+          revenueToday: 0,
+          rating: 4.6,
+        },
+      ]);
+      setLoading(false);
+    }, 1000);
   }, []);
 
-  const loadStaff = async () => {
-    try {
-      const token = localStorage.getItem('owner_token');
-      const restaurantId = localStorage.getItem('owner_restaurant_id');
-      const res = await axios.get('http://localhost:4000/api/v1/staff', {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'X-Restaurant-ID': restaurantId || ''
-        },
-      });
-      setStaff(res.data);
-    } catch (error) {
-      console.error('Failed to load staff:', error);
-    } finally {
-      setLoading(false);
+  const filteredStaff = staff.filter(member =>
+    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    member.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleAddStaff = () => {
+    setEditingStaff(null);
+    setShowModal(true);
+  };
+
+  const handleEditStaff = (staffMember: Staff) => {
+    setEditingStaff(staffMember);
+    setShowModal(true);
+  };
+
+  const handleDeleteStaff = (id: string) => {
+    if (confirm('Are you sure you want to delete this staff member?')) {
+      setStaff(staff.filter(member => member.id !== id));
     }
   };
 
-  const loadPerformance = async () => {
-    try {
-      const API_BASE = 'http://localhost:4000';
-      const res = await fetch(`${API_BASE}/staff/performance`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      
-      if (res.ok) {
-        const data = await res.json();
-        setPerformance(data.staffPerformance);
-      }
-    } catch (error) {
-      console.error('Failed to load performance:', error);
-    }
+  const handleToggleActive = (id: string) => {
+    setStaff(staff.map(member =>
+      member.id === id ? { ...member, isActive: !member.isActive } : member
+    ));
   };
 
-  const createStaff = async () => {
-    try {
-      const token = localStorage.getItem('owner_token');
-      const restaurantId = localStorage.getItem('owner_restaurant_id');
-      await axios.post(
-        'http://localhost:4000/api/v1/staff',
-        { ...newStaff, restaurantId },
-        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
-      );
-      setShowAddModal(false);
-      setNewStaff({ fullName: '', email: '', role: 'CASHIER', pin: '', password: '' });
-      loadStaff();
-    } catch (error) {
-      console.error('Failed to create staff:', error);
-      alert('Failed to create staff member. Please try again.');
+  const handleSaveStaff = (staffData: Partial<Staff>) => {
+    if (editingStaff) {
+      setStaff(staff.map(member =>
+        member.id === editingStaff.id ? { ...member, ...staffData } : member
+      ));
+    } else {
+      const newStaff: Staff = {
+        id: Date.now().toString(),
+        name: staffData.name || '',
+        email: staffData.email || '',
+        role: staffData.role || 'CASHIER',
+        pin: staffData.pin || '0000',
+        isActive: true,
+        ordersToday: 0,
+        revenueToday: 0,
+        rating: 0,
+      };
+      setStaff([...staff, newStaff]);
     }
+    setShowModal(false);
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading staff...</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Staff Management</h1>
-            <p className="text-gray-600 mt-1">Manage team members and performance</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Staff Management</h1>
+        <button
+          onClick={handleAddStaff}
+          className="flex items-center space-x-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+        >
+          <UserPlus className="h-5 w-5" />
+          <span>Add Staff</span>
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search staff by name or email..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+        />
+      </div>
+
+      {/* Staff Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredStaff.map((member) => (
+          <StaffCard
+            key={member.id}
+            staff={member}
+            onEdit={() => handleEditStaff(member)}
+            onDelete={() => handleDeleteStaff(member.id)}
+            onToggleActive={() => handleToggleActive(member.id)}
+          />
+        ))}
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <StaffModal
+          staff={editingStaff}
+          onSave={handleSaveStaff}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function StaffCard({ staff, onEdit, onDelete, onToggleActive }: {
+  staff: Staff;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleActive: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center space-x-3">
+          <div className={`h-12 w-12 rounded-full flex items-center justify-center ${
+            staff.isActive ? 'bg-orange-100' : 'bg-gray-100'
+          }`}>
+            <span className={`text-lg font-semibold ${
+              staff.isActive ? 'text-orange-600' : 'text-gray-400'
+            }`}>
+              {staff.name.charAt(0)}
+            </span>
           </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">{staff.name}</h3>
+            <p className="text-sm text-gray-500">{staff.email}</p>
+          </div>
+        </div>
+        <div className="flex space-x-2">
           <button
-            onClick={() => setShowAddModal(true)}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+            onClick={onEdit}
+            className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            + Add Staff Member
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
+      </div>
 
-        {/* Staff Performance */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Staff Performance</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Staff Member
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Orders
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Revenue
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Avg Order Value
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {performance.map((staff) => (
-                  <tr key={staff.staffId} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {staff.staffName}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{staff.totalOrders}</td>
-                    <td className="px-6 py-4 text-gray-600">
-                      ${staff.totalRevenue.toFixed(2)}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      ${staff.averageOrderValue.toFixed(2)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="space-y-2 mb-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500">Role</span>
+          <span className={`px-2 py-1 rounded text-xs font-medium ${
+            staff.role === 'MANAGER' ? 'bg-purple-100 text-purple-700' :
+            staff.role === 'CASHIER' ? 'bg-blue-100 text-blue-700' :
+            'bg-green-100 text-green-700'
+          }`}>
+            {staff.role}
+          </span>
         </div>
-
-        {/* Staff List */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Team Members</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Name
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Email
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    PIN
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {staff.map((member) => (
-                  <tr key={member.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {member.fullName}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">{member.email}</td>
-                    <td className="px-6 py-4 text-gray-600">{member.role}</td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {member.pin ? '••••' : 'Not set'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          member.isActive
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {member.isActive ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {new Date(member.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500">PIN</span>
+          <span className="font-mono text-gray-900">••••</span>
         </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-500">Status</span>
+          <button
+            onClick={onToggleActive}
+            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+              staff.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {staff.isActive ? 'Active' : 'Inactive'}
+          </button>
+        </div>
+      </div>
 
-        {/* Add Staff Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">Add Staff Member</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newStaff.fullName}
-                    onChange={(e) => setNewStaff({ ...newStaff, fullName: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Enter full name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email
-                  </label>
-                  <input
-                    type="email"
-                    value={newStaff.email}
-                    onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Enter email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role
-                  </label>
-                  <select
-                    value={newStaff.role}
-                    onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  >
-                    <option value="CASHIER">Cashier</option>
-                    <option value="MANAGER">Manager</option>
-                    <option value="KITCHEN">Kitchen</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    PIN (for POS login)
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={newStaff.pin}
-                    onChange={(e) => setNewStaff({ ...newStaff, pin: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="4-digit PIN"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Password (for dashboard login)
-                  </label>
-                  <input
-                    type="password"
-                    value={newStaff.password}
-                    onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Enter password"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createStaff}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-                >
-                  Add Staff
-                </button>
-              </div>
+      {staff.isActive && (
+        <div className="border-t pt-4 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500 flex items-center">
+              <ShoppingCart className="h-4 w-4 mr-1" />
+              Orders Today
+            </span>
+            <span className="font-semibold text-gray-900">{staff.ordersToday}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500 flex items-center">
+              <DollarSign className="h-4 w-4 mr-1" />
+              Revenue Today
+            </span>
+            <span className="font-semibold text-gray-900">${staff.revenueToday.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-500 flex items-center">
+              <Star className="h-4 w-4 mr-1" />
+              Rating
+            </span>
+            <span className="font-semibold text-gray-900">{staff.rating.toFixed(1)}</span>
+          </div>
+          {staff.shiftStart && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-500 flex items-center">
+                <Clock className="h-4 w-4 mr-1" />
+                Shift Start
+              </span>
+              <span className="font-semibold text-gray-900">{staff.shiftStart}</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StaffModal({ staff, onSave, onClose }: {
+  staff: Staff | null;
+  onSave: (data: Partial<Staff>) => void;
+  onClose: () => void;
+}) {
+  const [formData, setFormData] = useState({
+    name: staff?.name || '',
+    email: staff?.email || '',
+    role: staff?.role || 'CASHIER',
+    pin: staff?.pin || '',
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="p-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {staff ? 'Edit Staff' : 'Add Staff'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Role
+              </label>
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              >
+                <option value="CASHIER">Cashier</option>
+                <option value="KITCHEN">Kitchen</option>
+                <option value="MANAGER">Manager</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                PIN
+              </label>
+              <input
+                type="password"
+                value={formData.pin}
+                onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                maxLength={4}
+                required
+              />
+            </div>
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
+  );
+}
+
+function ShoppingCart({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <circle cx="8" cy="21" r="1" />
+      <circle cx="19" cy="21" r="1" />
+      <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+    </svg>
   );
 }

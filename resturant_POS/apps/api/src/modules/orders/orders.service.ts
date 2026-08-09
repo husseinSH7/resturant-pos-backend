@@ -1,8 +1,12 @@
 import { prisma } from "../../prisma.js";
-import { OrderStatus, TableStatus, OrderType, PaymentMethod, Prisma } from "@prisma/client";
+import { OrderStatus, TableStatus, OrderType, PaymentMethod, Prisma, SplitType } from "@prisma/client";
 import { createKitchenTicketForOrder } from "../kitchen/kitchen.service.js";
 import { broadcastToRestaurant } from "../../websocket/index.js";
 import { createAuditLog } from "../../services/audit.service.js";
+import { deductInventoryForOrder, refundInventoryForOrder } from "../inventory/inventory.service.js";
+import { calculateTax, roundAmount } from "../settings/settings.service.js";
+import { awardLoyaltyPointsForOrder } from "../customers/customers.service.js";
+import crypto from "crypto";
 
 type OrderInputItem = {
   productId: string;
@@ -43,8 +47,11 @@ export async function createOrder(
       0
     );
     const subtotal = data.subtotal ?? computedSubtotal;
-    const tax = data.taxAmount ?? 0;
-    const total = data.totalAmount ?? subtotal + tax;
+    
+    // Calculate tax using restaurant settings
+    const taxCalculation = await calculateTax(restaurantId, subtotal);
+    const tax = data.taxAmount ?? taxCalculation.taxAmount;
+    const total = data.totalAmount ?? taxCalculation.total;
 
     const created = await tx.order.create({
       data: {
@@ -126,6 +133,192 @@ export async function getOrders(restaurantId: string, filters?: { status?: strin
   return orders.map(mapOrder);
 }
 
+// Split payment functions
+export async function createOrderSplit(
+  restaurantId: string,
+  userId: string,
+  orderId: string,
+  data: {
+    name?: string | undefined;
+    amount: number;
+    splitType: SplitType;
+    customerId?: string | undefined;
+  }
+) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, restaurantId },
+  });
+
+  if (!order) throw new Error("Order not found");
+  if (order.status !== OrderStatus.OPEN) throw new Error("Order must be open to create splits");
+
+  const orderSplit = await prisma.orderSplit.create({
+    data: {
+      orderId,
+      name: data.name || "Split",
+      amount: new Prisma.Decimal(data.amount),
+      splitType: data.splitType,
+      customerId: data.customerId || null,
+    },
+    include: { customer: true },
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "ORDER_SPLIT_CREATED",
+    entityType: "ORDER_SPLIT",
+    entityId: orderSplit.id,
+    details: `Created ${data.splitType} split of $${data.amount} for order #${order.orderNumber}`,
+  });
+
+  return orderSplit;
+}
+
+export async function createPaymentSplit(
+  restaurantId: string,
+  userId: string,
+  paymentId: string,
+  orderSplitId: string,
+  amount: number
+) {
+  const payment = await prisma.payment.findFirst({
+    where: { id: paymentId, restaurantId },
+  });
+
+  if (!payment) throw new Error("Payment not found");
+
+  const orderSplit = await prisma.orderSplit.findFirst({
+    where: { id: orderSplitId },
+    include: { order: true },
+  });
+
+  if (!orderSplit) throw new Error("Order split not found");
+  if (orderSplit.order.restaurantId !== restaurantId) throw new Error("Order split does not belong to this restaurant");
+
+  const paymentSplit = await prisma.paymentSplit.create({
+    data: {
+      orderSplitId,
+      paymentId,
+      amount: new Prisma.Decimal(amount),
+    },
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "PAYMENT_SPLIT_CREATED",
+    entityType: "PAYMENT_SPLIT",
+    entityId: paymentSplit.id,
+    details: `Created payment split of $${amount} for payment ${paymentId}`,
+  });
+
+  return paymentSplit;
+}
+
+export async function payOrderWithSplit(
+  restaurantId: string,
+  userId: string,
+  orderId: string,
+  data: {
+    splits: Array<{
+      amount: number;
+      paymentMethod: PaymentMethod;
+      terminalReference?: string | undefined;
+      cardLast4?: string | undefined;
+      tipAmount?: number | undefined;
+      cashTendered?: number | undefined;
+    }>;
+  }
+) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, restaurantId },
+    include: { table: true },
+  });
+
+  if (!order) throw new Error("Order not found");
+  if (order.status !== OrderStatus.OPEN) throw new Error("Order is not open");
+
+  const totalSplitAmount = data.splits.reduce((sum, split) => sum + split.amount, 0);
+  if (totalSplitAmount !== Number(order.totalAmount)) {
+    throw new Error(`Split amounts must equal order total. Order: $${order.totalAmount}, Splits: $${totalSplitAmount}`);
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (order.tableId) {
+      await tx.table.updateMany({
+        where: { id: order.tableId, restaurantId },
+        data: { status: TableStatus.PAID },
+      });
+    }
+
+    // Create payments for each split
+    const payments = [];
+    for (const split of data.splits) {
+      const payment = await tx.payment.create({
+        data: {
+          id: crypto.randomUUID(),
+          restaurantId,
+          userId,
+          orderId,
+          amount: new Prisma.Decimal(split.amount),
+          method: split.paymentMethod,
+          terminalReference: split.terminalReference || null,
+          cardLast4: split.cardLast4 || null,
+          tipAmount: new Prisma.Decimal(split.tipAmount || 0),
+          cashTendered: split.cashTendered ? new Prisma.Decimal(split.cashTendered) : null,
+          changeAmount: split.cashTendered && split.cashTendered > split.amount
+            ? new Prisma.Decimal(split.cashTendered - split.amount)
+            : null,
+          status: "COMPLETED",
+          updatedAt: new Date(),
+        },
+      });
+      payments.push(payment);
+    }
+
+    // Update order status
+    const updatedOrder = await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: OrderStatus.PAID,
+        paymentMethod: PaymentMethod.CARD, // Set to CARD as default for split payments
+      },
+      include: {
+        table: true,
+        items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+        Payment: true,
+      },
+    });
+
+    return { order: updatedOrder, payments };
+  });
+
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "ORDER_PAID_SPLIT",
+    entityType: "ORDER",
+    entityId: orderId,
+    details: `Paid order #${order.orderNumber} with ${data.splits.length} split payments totaling $${totalSplitAmount}`,
+  });
+
+  // Award loyalty points after successful payment
+  try {
+    await awardLoyaltyPointsForOrder(restaurantId, orderId, userId);
+  } catch (error) {
+    console.error("Failed to award loyalty points:", error);
+    // Don't fail the payment if loyalty points awarding fails
+  }
+
+  broadcastToRestaurant(restaurantId, 'order-paid', mapOrder(result.order));
+
+  return {
+    order: mapOrder(result.order),
+    payments: result.payments,
+  };
+}
+
 export async function getOrderById(restaurantId: string, id: string) {
   const order = await prisma.order.findFirst({
     where: { id, restaurantId },
@@ -181,7 +374,7 @@ export async function addOrderItems(
       if (withModifiers) result.push(withModifiers);
     }
 
-    await recalcOrderTotals(tx, orderId);
+    await recalcOrderTotals(tx, orderId, restaurantId);
     return result;
   });
 
@@ -194,7 +387,20 @@ export async function payOrder(
   orderId: string,
   data: {
     paymentMethod: string;
-    terminalReference?: string | undefined;
+    terminalReference?: string | null | undefined;
+    cardLast4?: string | null;
+    tipAmount?: number;
+    cashTendered?: number;
+    giftCardId?: string | null;
+    payments?: Array<{
+      amount: number;
+      paymentMethod: PaymentMethod;
+      terminalReference?: string | null;
+      cardLast4?: string | null;
+      tipAmount?: number;
+      cashTendered?: number;
+      giftCardId?: string | null;
+    }>;
   }
 ) {
   const order = await prisma.order.findFirst({
@@ -205,6 +411,19 @@ export async function payOrder(
   if (!order) throw new Error("Order not found");
   if (order.status !== OrderStatus.OPEN) throw new Error("Order is not open");
 
+  // Handle mixed payments
+  if (data.paymentMethod === PaymentMethod.MIXED && data.payments && data.payments.length > 0) {
+    const convertedSplits = data.payments.map(p => ({
+      amount: p.amount,
+      paymentMethod: p.paymentMethod,
+      terminalReference: p.terminalReference ?? undefined,
+      cardLast4: p.cardLast4 ?? undefined,
+      tipAmount: p.tipAmount ?? undefined,
+      cashTendered: p.cashTendered ?? undefined,
+    }));
+    return payOrderWithSplit(restaurantId, userId, orderId, { splits: convertedSplits });
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     if (order.tableId) {
       await tx.table.updateMany({
@@ -212,6 +431,28 @@ export async function payOrder(
         data: { status: TableStatus.PAID },
       });
     }
+
+    // Create single payment record
+    const payment = await tx.payment.create({
+      data: {
+        id: crypto.randomUUID(),
+        restaurantId,
+        userId,
+        orderId,
+        amount: order.totalAmount,
+        method: data.paymentMethod as PaymentMethod,
+        terminalReference: data.terminalReference ?? null,
+        cardLast4: data.cardLast4 ?? null,
+        tipAmount: new Prisma.Decimal(data.tipAmount || 0),
+        cashTendered: data.cashTendered ? new Prisma.Decimal(data.cashTendered) : null,
+        changeAmount: data.cashTendered && data.cashTendered > Number(order.totalAmount)
+          ? new Prisma.Decimal(data.cashTendered - Number(order.totalAmount))
+          : null,
+        giftCardId: data.giftCardId ?? null,
+        status: "COMPLETED",
+        updatedAt: new Date(),
+      },
+    });
 
     const updatedOrder = await tx.order.update({
       where: { id: orderId },
@@ -223,13 +464,30 @@ export async function payOrder(
       include: {
         table: true,
         items: { include: { product: true, modifiers: true }, orderBy: { createdAt: "asc" } },
+        Payment: true,
       },
     });
 
-    return updatedOrder;
+    return { order: updatedOrder, payment };
   });
 
-  return mapOrder(updated);
+  // Deduct inventory after successful payment
+  try {
+    await deductInventoryForOrder(restaurantId, orderId);
+  } catch (error) {
+    console.error("Failed to deduct inventory:", error);
+    // Don't fail the payment if inventory deduction fails
+  }
+
+  // Award loyalty points after successful payment
+  try {
+    await awardLoyaltyPointsForOrder(restaurantId, orderId, userId);
+  } catch (error) {
+    console.error("Failed to award loyalty points:", error);
+    // Don't fail the payment if loyalty points awarding fails
+  }
+
+  return mapOrder(updated.order);
 }
 
 export async function voidOrder(restaurantId: string, userId: string, orderId: string, reason?: string) {
@@ -266,6 +524,16 @@ export async function voidOrder(restaurantId: string, userId: string, orderId: s
     entityId: orderId,
     details: `Voided order #${order.orderNumber} for $${order.totalAmount}. Reason: ${reason || "No reason provided"}`,
   });
+
+  // Restore inventory for voided order
+  try {
+    await refundInventoryForOrder(restaurantId, orderId);
+  } catch (error) {
+    console.error("Failed to restore inventory:", error);
+    // Don't fail the void if inventory restoration fails
+  }
+
+  broadcastToRestaurant(restaurantId, 'order-voided', mapOrder(updated));
 
   return mapOrder(updated);
 }
@@ -333,6 +601,14 @@ export async function refundOrder(
     details: `Refunded $${data.amount} for order #${order.orderNumber}. Reason: ${data.reason}`,
   });
 
+  // Restore inventory for refunded order
+  try {
+    await refundInventoryForOrder(restaurantId, orderId);
+  } catch (error) {
+    console.error("Failed to restore inventory:", error);
+    // Don't fail the refund if inventory restoration fails
+  }
+
   return {
     success: true,
     refund: {
@@ -352,14 +628,17 @@ async function nextOrderNumber(restaurantId: string) {
   return (result._max.orderNumber ?? 999) + 1;
 }
 
-async function recalcOrderTotals(tx: Prisma.TransactionClient, orderId: string) {
+async function recalcOrderTotals(tx: Prisma.TransactionClient, orderId: string, restaurantId: string) {
   const items = await tx.orderItem.findMany({ where: { orderId } });
   const subtotal = items.reduce(
     (sum, i) => sum.plus(i.totalPrice),
     new Prisma.Decimal(0)
   );
-  const tax = new Prisma.Decimal(0);
-  const total = subtotal.plus(tax);
+  
+  // Get tax calculation from settings
+  const taxCalculation = await calculateTax(restaurantId, Number(subtotal));
+  const tax = new Prisma.Decimal(taxCalculation.taxAmount);
+  const total = new Prisma.Decimal(taxCalculation.total);
 
   await tx.order.update({
     where: { id: orderId },

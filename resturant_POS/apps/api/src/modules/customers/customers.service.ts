@@ -1,5 +1,6 @@
 import { prisma } from "../../prisma.js";
 import { OrderStatus } from "@prisma/client";
+import { createAuditLog } from "../../services/audit.service.js";
 
 export async function getCustomers(restaurantId: string) {
   const customers = await prisma.customer.findMany({
@@ -73,7 +74,8 @@ export async function addLoyaltyPoints(
   restaurantId: string,
   customerId: string,
   points: number,
-  orderId?: string
+  orderId?: string,
+  userId?: string
 ) {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, restaurantId },
@@ -88,6 +90,17 @@ export async function addLoyaltyPoints(
     },
   });
 
+  if (userId) {
+    await createAuditLog({
+      restaurantId,
+      userId,
+      action: "LOYALTY_POINTS_ADDED",
+      entityType: "CUSTOMER",
+      entityId: customerId,
+      details: `Added ${points} loyalty points to customer ${customer.fullName}${orderId ? ` for order ${orderId}` : ''}`,
+    });
+  }
+
   return {
     id: updated.id,
     fullName: updated.fullName,
@@ -99,7 +112,9 @@ export async function addLoyaltyPoints(
 export async function redeemLoyaltyPoints(
   restaurantId: string,
   customerId: string,
-  pointsToRedeem: number
+  pointsToRedeem: number,
+  orderId: string,
+  userId: string
 ) {
   const customer = await prisma.customer.findFirst({
     where: { id: customerId, restaurantId },
@@ -115,12 +130,49 @@ export async function redeemLoyaltyPoints(
     },
   });
 
+  await createAuditLog({
+    restaurantId,
+    userId,
+    action: "LOYALTY_POINTS_REDEEMED",
+    entityType: "CUSTOMER",
+    entityId: customerId,
+    details: `Redeemed ${pointsToRedeem} loyalty points from customer ${customer.fullName} for order ${orderId}`,
+  });
+
   return {
     id: updated.id,
     fullName: updated.fullName,
     points: updated.points,
     pointsRedeemed: pointsToRedeem,
   };
+}
+
+// Calculate loyalty points based on order amount (1 point per $1 spent by default)
+export async function calculateLoyaltyPoints(orderAmount: number, restaurantId: string) {
+  // Default: 1 point per $1 spent
+  const pointsPerDollar = 1;
+  return Math.floor(orderAmount * pointsPerDollar);
+}
+
+// Auto-assign loyalty points after successful payment
+export async function awardLoyaltyPointsForOrder(
+  restaurantId: string,
+  orderId: string,
+  userId: string
+) {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, restaurantId },
+  });
+
+  if (!order || !order.customerId) return null;
+
+  const points = await calculateLoyaltyPoints(Number(order.totalAmount), restaurantId);
+  
+  if (points > 0) {
+    return await addLoyaltyPoints(restaurantId, order.customerId, points, orderId, userId);
+  }
+
+  return null;
 }
 
 export async function getLoyaltyTier(restaurantId: string, customerId: string) {

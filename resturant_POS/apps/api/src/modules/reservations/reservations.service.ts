@@ -1,5 +1,7 @@
 import { prisma } from "../../prisma.js";
+import { sendReservationConfirmation, sendReservationReminder, sendWaitlistNotification } from "../../services/notifications.service.js";
 import { ReservationStatus, WaitlistStatus, TableStatus } from "@prisma/client";
+import crypto from "crypto";
 
 export async function getReservations(restaurantId: string, filters?: {
   date?: string;
@@ -109,6 +111,24 @@ export async function createReservation(restaurantId: string, data: {
       Table: true,
     },
   });
+
+  // Send confirmation notifications (SMS/Email)
+  try {
+    const notificationData: any = {
+      customerName: reservation.customerName,
+      date: reservation.date,
+      time: reservation.time,
+      guestCount: reservation.guestCount,
+    };
+    if (reservation.customerPhone) notificationData.customerPhone = reservation.customerPhone;
+    if (reservation.customerEmail) notificationData.customerEmail = reservation.customerEmail;
+    if (reservation.tableId) notificationData.tableId = reservation.tableId;
+    
+    await sendReservationConfirmation(restaurantId, notificationData, "Restaurant Name"); // TODO: Get actual restaurant name
+  } catch (error) {
+    console.error("Failed to send reservation confirmation:", error);
+    // Don't fail the reservation if notifications fail
+  }
 
   return {
     id: reservation.id,

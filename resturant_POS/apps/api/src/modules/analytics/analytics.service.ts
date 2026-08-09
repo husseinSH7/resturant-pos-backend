@@ -1,6 +1,23 @@
 import { prisma } from "../../prisma.js";
 import { OrderStatus } from "@prisma/client";
 
+// CSV Export helper function
+function generateCSV(data: any[], headers: string[]): string {
+  const csvRows = [headers.join(',')];
+  
+  for (const row of data) {
+    const values = headers.map(header => {
+      const value = row[header];
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return `"${value.replace(/"/g, '""')}"`;
+      return String(value);
+    });
+    csvRows.push(values.join(','));
+  }
+  
+  return csvRows.join('\n');
+}
+
 export async function getSalesAnalytics(restaurantId: string, startDate?: string, endDate?: string) {
   const where: any = { restaurantId, status: OrderStatus.PAID };
   
@@ -338,5 +355,145 @@ export async function getRealTimeMetrics(restaurantId: string) {
     waitlistCount,
     averageOrderValue: paidOrders > 0 ? totalRevenue / paidOrders : 0,
     timestamp: new Date(),
+  };
+}
+
+export async function exportSalesReportCSV(restaurantId: string, startDate?: string, endDate?: string) {
+  const where: any = { restaurantId, status: OrderStatus.PAID };
+  
+  if (startDate) {
+    where.createdAt = { ...where.createdAt, gte: new Date(startDate) };
+  }
+  if (endDate) {
+    where.createdAt = { ...where.createdAt, lte: new Date(endDate) };
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: {
+      items: true,
+      Payment: true,
+      table: true,
+      User: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const data = orders.map(order => ({
+    orderNumber: order.orderNumber,
+    date: order.createdAt.toISOString().split('T')[0],
+    time: order.createdAt.toTimeString().split(' ')[0],
+    tableName: order.table?.name || 'N/A',
+    server: order.User?.fullName || 'N/A',
+    subtotal: Number(order.subtotal),
+    taxAmount: Number(order.taxAmount),
+    totalAmount: Number(order.totalAmount),
+    paymentMethod: order.paymentMethod || 'N/A',
+    itemCount: order.items.length,
+  }));
+
+  const headers = ['Order Number', 'Date', 'Time', 'Table', 'Server', 'Subtotal', 'Tax', 'Total', 'Payment Method', 'Item Count'];
+  const csv = generateCSV(data, headers);
+
+  return {
+    csv,
+    filename: `sales_report_${startDate || 'all'}_${endDate || 'all'}.csv`,
+    recordCount: data.length,
+  };
+}
+
+export async function exportOrdersReportCSV(restaurantId: string, startDate?: string, endDate?: string) {
+  const where: any = { restaurantId };
+  
+  if (startDate) {
+    where.createdAt = { ...where.createdAt, gte: new Date(startDate) };
+  }
+  if (endDate) {
+    where.createdAt = { ...where.createdAt, lte: new Date(endDate) };
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: {
+      items: true,
+      table: true,
+      Customer: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const data = orders.map(order => ({
+    orderNumber: order.orderNumber,
+    date: order.createdAt.toISOString().split('T')[0],
+    time: order.createdAt.toTimeString().split(' ')[0],
+    status: order.status,
+    orderType: order.orderType,
+    tableName: order.table?.name || 'N/A',
+    customerName: order.Customer?.fullName || 'N/A',
+    itemCount: order.items.length,
+    subtotal: Number(order.subtotal),
+    taxAmount: Number(order.taxAmount),
+    totalAmount: Number(order.totalAmount),
+    notes: order.notes || '',
+  }));
+
+  const headers = ['Order Number', 'Date', 'Time', 'Status', 'Order Type', 'Table', 'Customer', 'Item Count', 'Subtotal', 'Tax', 'Total', 'Notes'];
+  const csv = generateCSV(data, headers);
+
+  return {
+    csv,
+    filename: `orders_report_${startDate || 'all'}_${endDate || 'all'}.csv`,
+    recordCount: data.length,
+  };
+}
+
+export async function exportMenuPerformanceCSV(restaurantId: string, startDate?: string, endDate?: string) {
+  const where: any = { restaurantId, status: OrderStatus.PAID };
+  
+  if (startDate) {
+    where.createdAt = { ...where.createdAt, gte: new Date(startDate) };
+  }
+  if (endDate) {
+    where.createdAt = { ...where.createdAt, lte: new Date(endDate) };
+  }
+
+  const orders = await prisma.order.findMany({
+    where,
+    include: {
+      items: {
+        include: {
+          product: true,
+        },
+      },
+    },
+  });
+
+  const itemStats = new Map<string, any>();
+  
+  orders.forEach(order => {
+    order.items.forEach(item => {
+      const key = item.productId;
+      const existing = itemStats.get(key) || {
+        productName: item.product?.name || item.productId,
+        quantity: 0,
+        revenue: 0,
+        orderCount: 0,
+      };
+      existing.quantity += item.quantity;
+      existing.revenue += Number(item.totalPrice);
+      existing.orderCount += 1;
+      itemStats.set(key, existing);
+    });
+  });
+
+  const data = Array.from(itemStats.values()).sort((a, b) => b.revenue - a.revenue);
+
+  const headers = ['Product Name', 'Quantity Sold', 'Revenue', 'Order Count'];
+  const csv = generateCSV(data, headers);
+
+  return {
+    csv,
+    filename: `menu_performance_${startDate || 'all'}_${endDate || 'all'}.csv`,
+    recordCount: data.length,
   };
 }
