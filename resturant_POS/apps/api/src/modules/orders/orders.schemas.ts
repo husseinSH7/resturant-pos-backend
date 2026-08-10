@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PaymentMethod } from "@prisma/client";
 
 export const createOrderSchema = z.object({
   tableId: z.string().nullable().optional(),
@@ -35,7 +36,7 @@ export const addOrderItemsSchema = z.object({
 });
 
 export const payOrderSchema = z.object({
-  paymentMethod: z.enum(["CASH", "CARD", "MIXED", "GIFT_CARD"]),
+  paymentMethod: z.nativeEnum(PaymentMethod),
   terminalReference: z.string().optional(),
   cardLast4: z.string().optional(),
   tipAmount: z.number().nonnegative().optional(),
@@ -44,7 +45,7 @@ export const payOrderSchema = z.object({
   // For mixed payments
   payments: z.array(z.object({
     amount: z.number().positive("Amount must be positive"),
-    paymentMethod: z.enum(["CASH", "CARD", "GIFT_CARD"]),
+    paymentMethod: z.nativeEnum(PaymentMethod),
     terminalReference: z.string().optional(),
     cardLast4: z.string().optional(),
     tipAmount: z.number().nonnegative().optional(),
@@ -73,7 +74,7 @@ export const createOrderSplitSchema = z.object({
 export const payOrderWithSplitSchema = z.object({
   splits: z.array(z.object({
     amount: z.number().positive("Amount must be positive"),
-    paymentMethod: z.enum(["CASH", "CARD", "MIXED", "GIFT_CARD"]),
+    paymentMethod: z.nativeEnum(PaymentMethod),
     terminalReference: z.string().optional(),
     cardLast4: z.string().optional(),
     tipAmount: z.number().nonnegative().optional(),

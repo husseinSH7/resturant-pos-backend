@@ -1,3 +1,4 @@
+// reservations.controller.ts
 import type { Request, Response } from "express";
 import {
   getReservations,
@@ -10,10 +11,22 @@ import {
   getNoShowStats,
 } from "./reservations.service.js";
 
+/**
+ * Helper: extracts and validates the restaurantId from the authenticated user.
+ */
+function getRestaurantId(req: Request): string {
+  const id = req.user?.restaurantId;
+  if (!id) {
+    throw { status: 400, message: "User not associated with a restaurant" };
+  }
+  return id;
+}
+
 export async function list(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const { date, status } = req.query;
-    const data = await getReservations(req.user!.restaurantId, {
+    const data = await getReservations(restaurantId, {
       date: date as string,
       status: status as string,
     });
@@ -25,6 +38,7 @@ export async function list(req: Request, res: Response) {
 
 export async function create(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const {
       customerName,
       customerPhone,
@@ -42,7 +56,7 @@ export async function create(req: Request, res: Response) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const reservation = await createReservation(req.user!.restaurantId, {
+    const reservation = await createReservation(restaurantId, {
       customerName,
       customerPhone,
       customerEmail,
@@ -63,14 +77,19 @@ export async function create(req: Request, res: Response) {
 
 export async function updateStatus(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const id = req.params.id;
+    // Ensure id is a plain string (Express typing gives string | string[] | undefined)
+    if (typeof id !== "string") {
+      return res.status(400).json({ message: "Invalid reservation ID" });
+    }
     const { status } = req.body;
 
     if (!status) {
       return res.status(400).json({ message: "Status is required" });
     }
 
-    const result = await updateReservationStatus(req.user!.restaurantId, id, status);
+    const result = await updateReservationStatus(restaurantId, id, status);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update reservation" });
@@ -79,6 +98,7 @@ export async function updateStatus(req: Request, res: Response) {
 
 export async function checkAvailabilityController(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const { date, guestCount } = req.query;
 
     if (!date || !guestCount) {
@@ -86,7 +106,7 @@ export async function checkAvailabilityController(req: Request, res: Response) {
     }
 
     const availability = await checkAvailability(
-      req.user!.restaurantId,
+      restaurantId,
       date as string,
       Number(guestCount)
     );
@@ -100,7 +120,8 @@ export async function checkAvailabilityController(req: Request, res: Response) {
 // Waitlist controllers
 export async function listWaitlist(req: Request, res: Response) {
   try {
-    const data = await getWaitlist(req.user!.restaurantId);
+    const restaurantId = getRestaurantId(req);
+    const data = await getWaitlist(restaurantId);
     res.json(data);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to load waitlist" });
@@ -109,13 +130,14 @@ export async function listWaitlist(req: Request, res: Response) {
 
 export async function addToWaitlistController(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const { customerName, customerPhone, customerId, guestCount, notes } = req.body;
 
     if (!customerName || !guestCount) {
       return res.status(400).json({ message: "Customer name and guest count are required" });
     }
 
-    const entry = await addToWaitlist(req.user!.restaurantId, {
+    const entry = await addToWaitlist(restaurantId, {
       customerName,
       customerPhone,
       customerId,
@@ -131,14 +153,18 @@ export async function addToWaitlistController(req: Request, res: Response) {
 
 export async function updateWaitlistStatusController(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
     const id = req.params.id;
+    if (typeof id !== "string") {
+      return res.status(400).json({ message: "Invalid waitlist entry ID" });
+    }
     const { status } = req.body;
 
     if (!status) {
       return res.status(400).json({ message: "Status is required" });
     }
 
-    const result = await updateWaitlistStatus(req.user!.restaurantId, id, status);
+    const result = await updateWaitlistStatus(restaurantId, id, status);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ message: error.message || "Failed to update waitlist" });
@@ -147,7 +173,8 @@ export async function updateWaitlistStatusController(req: Request, res: Response
 
 export async function getNoShowStatsController(req: Request, res: Response) {
   try {
-    const stats = await getNoShowStats(req.user!.restaurantId);
+    const restaurantId = getRestaurantId(req);
+    const stats = await getNoShowStats(restaurantId);
     res.json(stats);
   } catch (error: any) {
     res.status(500).json({ message: error.message || "Failed to get no-show stats" });

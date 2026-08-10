@@ -5,6 +5,14 @@ import bcrypt from "bcrypt";
 
 const SALT_ROUNDS = 10;
 
+function getStringParam(params: Record<string, string | string[] | undefined>, key: string): string {
+  const value = params[key];
+  if (typeof value !== "string") {
+    throw { status: 400, message: `Invalid or missing parameter: ${key}` };
+  }
+  return value;
+}
+
 export async function getRestaurants(req: Request, res: Response) {
   try {
     const restaurants = await prisma.restaurant.findMany({
@@ -32,9 +40,9 @@ export async function getRestaurants(req: Request, res: Response) {
 
 export async function getRestaurant(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = getStringParam(req.params, "id");
     const restaurant = await prisma.restaurant.findUnique({
-      where: { id: id as string },
+      where: { id },
       include: {
         subscription: {
           include: { plan: true },
@@ -51,7 +59,11 @@ export async function getRestaurant(req: Request, res: Response) {
     }
 
     res.json(restaurant);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
     console.error("Error fetching restaurant:", error);
     res.status(500).json({ message: "Failed to fetch restaurant" });
   }
@@ -128,7 +140,7 @@ export async function createRestaurant(req: Request, res: Response) {
 
 export async function updateRestaurant(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = getStringParam(req.params, "id");
     const { name, address, phone, isActive } = req.body as {
       name?: string;
       address?: string;
@@ -143,12 +155,16 @@ export async function updateRestaurant(req: Request, res: Response) {
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const restaurant = await prisma.restaurant.update({
-      where: { id: id as string },
+      where: { id },
       data: updateData,
     });
 
     res.json(restaurant);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
     console.error("Error updating restaurant:", error);
     res.status(500).json({ message: "Failed to update restaurant" });
   }
@@ -202,7 +218,7 @@ export async function createPlan(req: Request, res: Response) {
 
 export async function updatePlan(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = getStringParam(req.params, "id");
     const { name, basePrice, maxTables, maxScreens, maxStaff, maxLocations, features, isActive } = req.body as {
       name?: string;
       basePrice?: number;
@@ -225,12 +241,16 @@ export async function updatePlan(req: Request, res: Response) {
     if (isActive !== undefined) updateData.isActive = isActive;
 
     const plan = await prisma.plan.update({
-      where: { id: id as string },
+      where: { id },
       data: updateData,
     });
 
     res.json(plan);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
     console.error("Error updating plan:", error);
     res.status(500).json({ message: "Failed to update plan" });
   }
@@ -238,7 +258,7 @@ export async function updatePlan(req: Request, res: Response) {
 
 export async function updateSubscription(req: Request, res: Response) {
   try {
-    const { restaurantId } = req.params;
+    const restaurantId = getStringParam(req.params, "restaurantId");
     const { planId, status, trialUntil, paidUntil, maxScreens, maxTables, maxStaff, maxLocations } = req.body;
 
     const subscription = await prisma.subscription.update({
@@ -257,7 +277,11 @@ export async function updateSubscription(req: Request, res: Response) {
     });
 
     res.json(subscription);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.status) {
+      res.status(error.status).json({ message: error.message });
+      return;
+    }
     console.error("Error updating subscription:", error);
     res.status(500).json({ message: "Failed to update subscription" });
   }

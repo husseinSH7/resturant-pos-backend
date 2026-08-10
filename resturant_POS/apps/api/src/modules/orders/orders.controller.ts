@@ -97,23 +97,35 @@ export async function pay(req: Request, res: Response) {
     const id = req.params.id;
     if (typeof id !== "string") return res.status(400).json({ message: "Order ID is required" });
     const validatedData = payOrderSchema.parse(req.body);
-    const order = await payOrder(restaurantId, userId, id, {
+
+    // Build the payment input, excluding undefined optional fields
+    const paymentInput: any = {
       paymentMethod: validatedData.paymentMethod,
       terminalReference: validatedData.terminalReference ?? null,
       cardLast4: validatedData.cardLast4 ?? null,
-      tipAmount: validatedData.tipAmount,
-      cashTendered: validatedData.cashTendered,
       giftCardId: validatedData.giftCardId ?? null,
-      payments: validatedData.payments?.map(p => ({
-        amount: p.amount,
-        paymentMethod: p.paymentMethod,
-        terminalReference: p.terminalReference ?? null,
-        cardLast4: p.cardLast4 ?? null,
-        tipAmount: p.tipAmount,
-        cashTendered: p.cashTendered,
-        giftCardId: p.giftCardId ?? null,
-      })),
-    });
+    };
+    // Only include tipAmount and cashTendered if they are provided (not undefined)
+    if (validatedData.tipAmount !== undefined) paymentInput.tipAmount = validatedData.tipAmount;
+    if (validatedData.cashTendered !== undefined) paymentInput.cashTendered = validatedData.cashTendered;
+
+    // Handle payments array if present, with the same conditional logic
+    if (validatedData.payments) {
+      paymentInput.payments = validatedData.payments.map(p => {
+        const payment: any = {
+          amount: p.amount,
+          paymentMethod: p.paymentMethod,
+          terminalReference: p.terminalReference ?? null,
+          cardLast4: p.cardLast4 ?? null,
+          giftCardId: p.giftCardId ?? null,
+        };
+        if (p.tipAmount !== undefined) payment.tipAmount = p.tipAmount;
+        if (p.cashTendered !== undefined) payment.cashTendered = p.cashTendered;
+        return payment;
+      });
+    }
+
+    const order = await payOrder(restaurantId, userId, id, paymentInput);
     res.json({ success: true, order });
   } catch (error: any) {
     if (error.name === 'ZodError') {

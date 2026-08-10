@@ -1,12 +1,28 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    return null;
+  }
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
 
 export async function sendPasswordResetEmail(email: string, resetToken: string) {
   const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+  const client = getResendClient();
+
+  if (!client) {
+    console.warn('RESEND_API_KEY not set — skipping password reset email send.');
+    return { success: false, error: 'Email service not configured' };
+  }
 
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
       to: email,
       subject: 'Reset Your Password',
@@ -24,16 +40,21 @@ export async function sendPasswordResetEmail(email: string, resetToken: string) 
     return { success: true };
   } catch (error) {
     console.error('Failed to send password reset email:', error);
-    // Don't throw error - we don't want to block the flow if email fails
     return { success: false, error };
   }
 }
 
 export async function sendEmailVerificationEmail(email: string, verificationToken: string) {
   const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+  const client = getResendClient();
+
+  if (!client) {
+    console.warn('RESEND_API_KEY not set — skipping verification email send.');
+    return { success: false, error: 'Email service not configured' };
+  }
 
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
       to: email,
       subject: 'Verify Your Email Address',
@@ -56,9 +77,15 @@ export async function sendEmailVerificationEmail(email: string, verificationToke
 
 export async function sendOwnerInviteEmail(email: string, restaurantName: string, inviteToken: string) {
   const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invite?token=${inviteToken}`;
+  const client = getResendClient();
+
+  if (!client) {
+    console.warn('RESEND_API_KEY not set — skipping owner invite email send.');
+    return { success: false, error: 'Email service not configured' };
+  }
 
   try {
-    await resend.emails.send({
+    await client.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
       to: email,
       subject: `You're invited to join ${restaurantName}`,

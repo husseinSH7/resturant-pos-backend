@@ -11,16 +11,18 @@ export async function registerDevice(req: Request, res: Response) {
       return;
     }
 
-    const device = await prisma.device.create({
-      data: {
-        restaurantId: req.user.restaurantId,
-        deviceId,
-        deviceType: deviceType as DeviceType,
-        name,
-        lastSeenAt: new Date(),
-      },
-    });
+    // Build data object, only include 'name' if it's provided
+    const data: Record<string, unknown> = {
+      restaurantId: req.user.restaurantId,
+      deviceId,
+      deviceType: deviceType as DeviceType,
+      lastSeenAt: new Date(),
+    };
+    if (name !== undefined) {
+      data.name = name;
+    }
 
+    const device = await prisma.device.create({ data: data as any });
     res.status(201).json(device);
   } catch (error) {
     console.error("Error registering device:", error);
@@ -49,20 +51,30 @@ export async function listDevices(req: Request, res: Response) {
 
 export async function updateDevice(req: Request, res: Response) {
   try {
-    const { id } = req.params;
-    const { name, isActive } = req.body;
-
     if (!req.user?.restaurantId) {
       res.status(401).json({ message: "Unauthorized: no restaurant context" });
       return;
     }
+
+    const id = req.params.id;
+    if (typeof id !== "string") {
+      res.status(400).json({ message: "Invalid device ID" });
+      return;
+    }
+
+    const { name, isActive } = req.body;
+
+    // Build update data, only include properties that are defined
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) updateData.name = name;
+    if (isActive !== undefined) updateData.isActive = isActive;
 
     const device = await prisma.device.updateMany({
       where: { 
         id,
         restaurantId: req.user.restaurantId 
       },
-      data: { name, isActive },
+      data: updateData,
     });
 
     if (device.count === 0) {
