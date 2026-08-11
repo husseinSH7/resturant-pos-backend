@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { format } from 'date-fns';
@@ -32,11 +32,7 @@ export default function AuditLogs() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => {
-    loadLogs();
-  }, [page, filterAction, filterRestaurant]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     try {
       const token = localStorage.getItem('admin_token');
       const params: any = { page };
@@ -54,7 +50,11 @@ export default function AuditLogs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, filterAction, filterRestaurant]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   const getActionColor = (action: string) => {
     switch (action) {

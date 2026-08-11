@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Tablet, Clock, Wifi, WifiOff, MoreVertical, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { Smartphone, Monitor, Tablet, Clock, Wifi, WifiOff, Trash2, AlertTriangle } from 'lucide-react';
 
 interface Device {
   id: string;
@@ -181,7 +181,7 @@ export default function Devices() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Device Type</label>
           <select
             value={filterType}
-            onChange={(e) => setFilterType(e.target.value as any)}
+            onChange={(e) => setFilterType(e.target.value as 'ALL' | 'POS' | 'KDS' | 'MANAGER_TABLET')}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           >
             <option value="ALL">All Types</option>
@@ -194,7 +194,7 @@ export default function Devices() {
           <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
+            onChange={(e) => setFilterStatus(e.target.value as 'ALL' | 'ONLINE' | 'OFFLINE')}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
           >
             <option value="ALL">All Status</option>

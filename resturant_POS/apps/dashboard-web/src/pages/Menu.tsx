@@ -180,8 +180,8 @@ function CategoryModal({ onClose, onSuccess }: { onClose: () => void; onSuccess:
         { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
       );
       onSuccess();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create category');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create category');
     } finally {
       setLoading(false);
     }
@@ -270,8 +270,8 @@ function ProductModal({
         { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
       );
       onSuccess();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to create product');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create product');
     } finally {
       setLoading(false);
     }

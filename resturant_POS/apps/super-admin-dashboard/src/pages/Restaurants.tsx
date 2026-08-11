@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Building2, Users, Smartphone, Edit2, Trash2, Search, Filter, MoreVertical } from 'lucide-react';
+import { Plus, Building2, Users, Smartphone, Edit2, Trash2, Search } from 'lucide-react';
 
 interface Restaurant {
   id: string;

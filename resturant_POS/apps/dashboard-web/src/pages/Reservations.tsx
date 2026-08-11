@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
 interface Reservation {
@@ -58,11 +58,7 @@ export default function Reservations() {
     notes: '',
   });
 
-  useEffect(() => {
-    loadData();
-  }, [selectedDate, activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const token = localStorage.getItem('owner_token');
       const restaurantId = localStorage.getItem('owner_restaurant_id');
@@ -86,7 +82,11 @@ export default function Reservations() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, selectedDate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const createReservation = async () => {
     try {

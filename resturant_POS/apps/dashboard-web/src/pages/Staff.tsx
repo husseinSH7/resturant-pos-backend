@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Search, MoreVertical, UserPlus, Clock, DollarSign, Star } from 'lucide-react';
+import { Pencil, Trash2, Search, UserPlus, Clock, DollarSign, Star } from 'lucide-react';
 
 interface Staff {
   id: string;
@@ -346,7 +346,7 @@ function StaffModal({ staff, onSave, onClose }: {
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'MANAGER' | 'CASHIER' | 'KITCHEN' })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               >
                 <option value="CASHIER">Cashier</option>

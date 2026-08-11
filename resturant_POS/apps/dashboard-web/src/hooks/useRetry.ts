@@ -11,43 +11,47 @@ export function useRetry(options: UseRetryOptions = {}) {
   const [attempt, setAttempt] = useState(0);
   const [isRetrying, setIsRetrying] = useState(false);
 
-  const retry = useCallback(
-    async <T,>(fn: () => Promise<T>): Promise<T> => {
-      if (attempt >= maxAttempts) {
-        throw new Error(`Max retry attempts (${maxAttempts}) exceeded`);
-      }
-
-      setIsRetrying(true);
-      
-      try {
-        const result = await fn();
-        setAttempt(0);
-        setIsRetrying(false);
-        return result;
-      } catch (error) {
-        setAttempt((prev) => prev + 1);
-        
-        if (attempt + 1 >= maxAttempts) {
-          setIsRetrying(false);
-          throw error;
-        }
-
-        if (onRetry) {
-          onRetry(attempt + 1);
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, delay * (attempt + 1)));
-        setIsRetrying(false);
-        return retry(fn);
-      }
-    },
-    [attempt, maxAttempts, delay, onRetry]
-  );
-
   const reset = useCallback(() => {
     setAttempt(0);
     setIsRetrying(false);
   }, []);
+
+  const retry = useCallback(
+    async <T,>(fn: () => Promise<T>): Promise<T> => {
+      const executeRetry = async (currentAttempt = 0): Promise<T> => {
+        if (currentAttempt >= maxAttempts) {
+          throw new Error(`Max retry attempts (${maxAttempts}) exceeded`);
+        }
+
+        setIsRetrying(true);
+        
+        try {
+          const result = await fn();
+          setAttempt(0);
+          setIsRetrying(false);
+          return result;
+        } catch (error) {
+          setAttempt((prev) => prev + 1);
+          
+          if (currentAttempt + 1 >= maxAttempts) {
+            setIsRetrying(false);
+            throw error;
+          }
+
+          if (onRetry) {
+            onRetry(currentAttempt + 1);
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, delay * (currentAttempt + 1)));
+          setIsRetrying(false);
+          return executeRetry(currentAttempt + 1);
+        }
+      };
+
+      return executeRetry();
+    },
+    [maxAttempts, delay, onRetry]
+  );
 
   return {
     retry,

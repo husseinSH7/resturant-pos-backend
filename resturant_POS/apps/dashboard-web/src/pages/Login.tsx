@@ -29,8 +29,8 @@ export default function Login() {
       }
       
       navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Login failed');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }

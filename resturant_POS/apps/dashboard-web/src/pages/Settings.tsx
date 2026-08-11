@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Printer, DollarSign, Clock, Building2, Phone, MapPin, Globe } from 'lucide-react';
+import { Save, DollarSign, Clock } from 'lucide-react';
 
 interface Settings {
   restaurantName: string;
@@ -137,7 +137,7 @@ export default function Settings() {
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as 'general' | 'tax' | 'receipt' | 'printer' | 'hours')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === tab.id
                   ? 'border-orange-600 text-orange-600'

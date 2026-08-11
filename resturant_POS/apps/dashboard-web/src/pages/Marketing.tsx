@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Send, Mail, MessageSquare, Users, TrendingUp, Calendar, Clock, Target, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Send, Mail, MessageSquare, Users, TrendingUp, Calendar, Edit2, Trash2 } from 'lucide-react';
 
 interface Campaign {
   id: string;
@@ -354,7 +354,7 @@ function CampaignModal({ campaign, segments, onClose, onSave }: {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as 'EMAIL' | 'SMS' })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   <option value="EMAIL">Email</option>
@@ -366,7 +366,7 @@ function CampaignModal({ campaign, segments, onClose, onSave }: {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Target Audience</label>
                 <select
                   value={formData.targetAudience}
-                  onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value as 'ALL' | 'LOYALTY_TIER' | 'RECENT_CUSTOMERS' | 'INACTIVE' })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                 >
                   {segments.map(segment => (

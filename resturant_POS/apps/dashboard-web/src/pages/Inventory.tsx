@@ -77,7 +77,7 @@ export default function Inventory() {
       
       // Load ingredients from API
       const ingredientsRes = await axios.get('http://localhost:4000/api/v1/inventory/ingredients', { headers });
-      setIngredients(ingredientsRes.data.map((ing: any) => ({
+      setIngredients(ingredientsRes.data.map((ing: { id: string; name: string; unit: string; costPerUnit: number; currentStock: number; minStock: number }) => ({
         id: ing.id,
         name: ing.name,
         sku: null,
@@ -90,7 +90,7 @@ export default function Inventory() {
       
       // Load low stock alerts from API
       const alertsRes = await axios.get('http://localhost:4000/api/v1/inventory/low-stock', { headers });
-      setLowStockAlerts(alertsRes.data.map((alert: any) => ({
+      setLowStockAlerts(alertsRes.data.map((alert: { id: string; name: string; currentStock: number; minStock: number; unit: string }) => ({
         ingredientId: alert.id,
         ingredientName: alert.name,
         currentStock: alert.currentStock,

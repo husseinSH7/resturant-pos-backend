@@ -248,7 +248,7 @@ export async function payOrderWithSplit(
     if (order.tableId) {
       await tx.table.updateMany({
         where: { id: order.tableId, restaurantId },
-        data: { status: TableStatus.PAID },
+        data: { status: TableStatus.AVAILABLE },
       });
     }
 
@@ -428,7 +428,7 @@ export async function payOrder(
     if (order.tableId) {
       await tx.table.updateMany({
         where: { id: order.tableId, restaurantId },
-        data: { status: TableStatus.PAID },
+        data: { status: TableStatus.AVAILABLE },
       });
     }
 
