@@ -1,194 +1,230 @@
-import { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { useState, useEffect } from 'react'
+import { 
+  ShoppingBag, Users, Table2, DollarSign, 
+  AlertTriangle, Calendar, ArrowRight,
+} from 'lucide-react'
+import { api } from '../services/api'
+import { Link } from 'react-router-dom'
 
-interface OverviewStats {
-  totalOrders: number;
-  activeTables: number;
-  totalRevenue: number;
-  activeStaff: number;
-  lowStockItems: number;
-  pendingReservations: number;
+interface Stats {
+  totalOrders: number
+  activeTables: number
+  totalRevenue: number
+  activeStaff: number
+  lowStockItems: number
+  pendingReservations: number
 }
 
 export default function Admin() {
-  const [stats, setStats] = useState<OverviewStats>({
+  const [stats, setStats] = useState<Stats>({
     totalOrders: 0,
     activeTables: 0,
     totalRevenue: 0,
     activeStaff: 0,
     lowStockItems: 0,
     pendingReservations: 0,
-  });
-  const [loading, setLoading] = useState(true);
+  })
+  const [loading, setLoading] = useState(true)
+  const [recentOrders, setRecentOrders] = useState<any[]>([])
 
   useEffect(() => {
-    loadSystemStats();
-  }, []);
+    loadDashboard()
+  }, [])
 
-  const loadSystemStats = async () => {
+  const loadDashboard = async () => {
     try {
-      // Fetch from known working endpoints
       const [ordersRes, tablesRes, reservationsRes, lowStockRes] = await Promise.all([
         api.get('/orders?status=PAID'),
         api.get('/tables'),
-        api.get('/reservations?status=CONFIRMED', {
-          params: { date: new Date().toISOString().split('T')[0] },
-        }),
+        api.get('/reservations?status=CONFIRMED', { params: { date: new Date().toISOString().split('T')[0] } }),
         api.get('/inventory/ingredients/low-stock'),
-      ]);
+      ])
 
-      const ordersData = ordersRes.data;
-      const tablesData = tablesRes.data;
-      const reservationsData = reservationsRes.data;
-      const lowStockData = lowStockRes.data;
-
-      const totalRevenue = ordersData.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
+      const orders = ordersRes.data
+      const totalRevenue = orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0)
 
       setStats({
-        totalOrders: ordersData.length,
-        activeTables: tablesData.filter((t: any) => t.status === 'OCCUPIED').length,
+        totalOrders: orders.length,
+        activeTables: tablesRes.data.filter((t: any) => t.status === 'OCCUPIED').length,
         totalRevenue,
-        activeStaff: 0, // no staff endpoint yet
-        lowStockItems: lowStockData.length,
-        pendingReservations: reservationsData.length,
-      });
+        activeStaff: 0,
+        lowStockItems: lowStockRes.data.length,
+        pendingReservations: reservationsRes.data.length,
+      })
+
+      // Get last 5 orders
+      setRecentOrders(orders.slice(0, 5))
     } catch (error) {
-      console.error('Failed to load system stats', error);
+      console.error('Failed to load dashboard', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading admin panel...</div>
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
-          <p className="text-gray-600 mt-1">System overview and administrative controls</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-sm text-gray-500 mt-1">Welcome back! Here's what's happening today</p>
+      </div>
 
-        {/* System Status – simplified, remove health check if not needed */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">System Status</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-gray-700">API Server</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-gray-700">Database</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-              <span className="text-gray-700">WebSocket (not used)</span>
-            </div>
-          </div>
-        </div>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <StatCard 
+          title="Today's Revenue" 
+          value={`$${stats.totalRevenue.toFixed(2)}`} 
+          icon={<DollarSign className="h-5 w-5" />} 
+          color="green"
+          subtitle={`${stats.totalOrders} orders`}
+        />
+        <StatCard 
+          title="Active Tables" 
+          value={stats.activeTables} 
+          icon={<Table2 className="h-5 w-5" />} 
+          color="orange"
+          subtitle="Currently occupied"
+        />
+        <StatCard 
+          title="Pending Reservations" 
+          value={stats.pendingReservations} 
+          icon={<Calendar className="h-5 w-5" />} 
+          color="blue"
+          subtitle="Awaiting confirmation"
+        />
+        <StatCard 
+          title="Low Stock Alerts" 
+          value={stats.lowStockItems} 
+          icon={<AlertTriangle className="h-5 w-5" />} 
+          color="red"
+          subtitle="Items need restocking"
+        />
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Today's Orders</div>
-            <div className="text-3xl font-bold text-gray-900">{stats.totalOrders}</div>
-            <div className="text-sm text-gray-500 mt-2">Paid orders today</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Today's Revenue</div>
-            <div className="text-3xl font-bold text-green-600">${stats.totalRevenue.toFixed(2)}</div>
-            <div className="text-sm text-gray-500 mt-2">Total revenue today</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Active Tables</div>
-            <div className="text-3xl font-bold text-blue-600">{stats.activeTables}</div>
-            <div className="text-sm text-gray-500 mt-2">Currently occupied</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Active Staff</div>
-            <div className="text-3xl font-bold text-purple-600">{stats.activeStaff}</div>
-            <div className="text-sm text-gray-500 mt-2">Currently working</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Low Stock Alerts</div>
-            <div className="text-3xl font-bold text-orange-600">{stats.lowStockItems}</div>
-            <div className="text-sm text-gray-500 mt-2">Items need restocking</div>
-          </div>
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-sm text-gray-600 mb-2">Pending Reservations</div>
-            <div className="text-3xl font-bold text-teal-600">{stats.pendingReservations}</div>
-            <div className="text-sm text-gray-500 mt-2">Awaiting confirmation</div>
-          </div>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <QuickAction to="/tables" icon={<Table2 className="h-6 w-6" />} label="Manage Tables" />
+          <QuickAction to="/staff" icon={<Users className="h-6 w-6" />} label="Staff Schedule" />
+          <QuickAction to="/inventory" icon={<ShoppingBag className="h-6 w-6" />} label="Check Inventory" />
+          <QuickAction to="/reservations" icon={<Calendar className="h-6 w-6" />} label="View Reservations" />
         </div>
+      </div>
 
-        {/* Quick Actions (unchanged, just for UI) */}
-        <div className="bg-white rounded-lg shadow p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-              <div className="text-2xl">📊</div>
-              <div className="text-left">
-                <div className="font-medium text-gray-900">View Analytics</div>
-                <div className="text-sm text-gray-500">Sales and performance</div>
-              </div>
-            </button>
-            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-              <div className="text-2xl">👥</div>
-              <div className="text-left">
-                <div className="font-medium text-gray-900">Manage Staff</div>
-                <div className="text-sm text-gray-500">Team and permissions</div>
-              </div>
-            </button>
-            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-              <div className="text-2xl">📦</div>
-              <div className="text-left">
-                <div className="font-medium text-gray-900">Inventory</div>
-                <div className="text-sm text-gray-500">Stock and recipes</div>
-              </div>
-            </button>
-            <button className="flex items-center gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
-              <div className="text-2xl">⚙️</div>
-              <div className="text-left">
-                <div className="font-medium text-gray-900">Settings</div>
-                <div className="text-sm text-gray-500">Configuration</div>
-              </div>
-            </button>
-          </div>
+      {/* Recent Orders */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
+          <Link to="/analytics" className="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1">
+            View all <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {recentOrders.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No recent orders</td></tr>
+              ) : (
+                recentOrders.map((order: any) => (
+                  <tr key={order.id} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-900">#{order.id.slice(0, 8)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">{order.customerName || 'Guest'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${(order.total || 0).toFixed(2)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                        {order.status || 'PAID'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-        {/* System Information (unchanged) */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">System Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="font-medium text-gray-900 mb-2">Environment</h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div>API Version: 1.0.0</div>
-                <div>Database: PostgreSQL (Neon)</div>
-                <div>Environment: Development</div>
-              </div>
-            </div>
-            <div>
-              <h3 className="font-medium text-gray-900 mb-2">Features</h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div>✓ Real-time Analytics</div>
-                <div>✓ WebSocket Support</div>
-                <div>✓ Inventory Management</div>
-                <div>✓ Reservations System</div>
-                <div>✓ Staff Management</div>
-                <div>✓ Customer Loyalty</div>
-              </div>
-            </div>
-          </div>
+      {/* System Status */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">System Status</h2>
+        <div className="flex flex-wrap gap-6">
+          <StatusItem label="API Server" status="online" />
+          <StatusItem label="Database" status="online" />
+          <StatusItem label="WebSocket" status="offline" />
+          <StatusItem label="Printer" status="unknown" />
         </div>
       </div>
     </div>
-  );
+  )
+}
+
+function StatCard({ title, value, icon, color, subtitle }: any) {
+  const colorMap: any = {
+    green: 'bg-green-100 text-green-600',
+    orange: 'bg-orange-100 text-orange-600',
+    blue: 'bg-blue-100 text-blue-600',
+    red: 'bg-red-100 text-red-600',
+    purple: 'bg-purple-100 text-purple-600',
+  }
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+        </div>
+        <div className={`p-2.5 rounded-lg ${colorMap[color] || 'bg-gray-100 text-gray-600'}`}>
+          {icon}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function QuickAction({ to, icon, label }: any) {
+  return (
+    <Link
+      to={to}
+      className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 transition border-2 border-transparent group"
+    >
+      <div className="text-gray-400 group-hover:text-orange-600 transition">{icon}</div>
+      <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700 mt-2">{label}</span>
+    </Link>
+  )
+}
+
+function StatusItem({ label, status }: any) {
+  const statusConfig: any = {
+    online: { color: 'bg-green-500', text: 'Online' },
+    offline: { color: 'bg-red-500', text: 'Offline' },
+    unknown: { color: 'bg-yellow-500', text: 'Unknown' },
+  }
+  const config = statusConfig[status] || statusConfig.unknown
+  return (
+    <div className="flex items-center gap-3">
+      <div className={`w-3 h-3 rounded-full ${config.color}`} />
+      <span className="text-sm text-gray-700">{label}</span>
+      <span className="text-xs text-gray-400">({config.text})</span>
+    </div>
+  )
 }

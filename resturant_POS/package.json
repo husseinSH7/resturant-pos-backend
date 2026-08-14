@@ -13,5 +13,9 @@
     "dev:kds": "npm --workspace apps/kds-mobile run start",
     "build:api": "npm --workspace apps/api run build",
     "build:web": "npm --workspace apps/dashboard-web run build"
+  },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   }
 }

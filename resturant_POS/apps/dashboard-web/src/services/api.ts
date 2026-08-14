@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Use environment variable for flexibility, fallback to localhost
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1';
+// Use environment variable for flexibility – fallback to relative '/api/v1'
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
 
 export const api = axios.create({
   baseURL: API_BASE,

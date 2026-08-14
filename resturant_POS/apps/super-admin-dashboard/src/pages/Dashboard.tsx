@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import Sidebar from '../components/Sidebar';
 
 interface Restaurant {
@@ -39,12 +39,9 @@ export default function Dashboard() {
 
   const loadData = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const headers = { Authorization: `Bearer ${token}` };
-
       const [restaurantsRes, analyticsRes] = await Promise.all([
-        axios.get('http://localhost:4000/api/v1/platform-admin/restaurants', { headers }),
-        axios.get('http://localhost:4000/api/v1/platform-admin/analytics', { headers }),
+        api.get('/platform-admin/restaurants'),
+        api.get('/platform-admin/analytics'),
       ]);
 
       setRestaurants(restaurantsRes.data);
@@ -58,11 +55,9 @@ export default function Dashboard() {
 
   const toggleRestaurantStatus = async (id: string, currentStatus: boolean) => {
     try {
-      const token = localStorage.getItem('admin_token');
-      await axios.put(
-        `http://localhost:4000/api/v1/platform-admin/restaurants/${id}`,
-        { isActive: !currentStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await api.put(
+        `/platform-admin/restaurants/${id}`,
+        { isActive: !currentStatus }
       );
       loadData();
     } catch (error) {
@@ -233,10 +228,7 @@ function CreateRestaurantForm({ onClose, onSuccess }: { onClose: () => void; onS
 
   const loadPlans = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const response = await axios.get('http://localhost:4000/api/v1/platform-admin/plans', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await api.get('/platform-admin/plans');
       setPlans(response.data);
       if (response.data.length > 0) {
         setFormData((prev) => ({ ...prev, planId: response.data[0].id }));
@@ -252,10 +244,7 @@ function CreateRestaurantForm({ onClose, onSuccess }: { onClose: () => void; onS
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('admin_token');
-      await axios.post('http://localhost:4000/api/v1/platform-admin/restaurants', formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await api.post('/platform-admin/restaurants', formData);
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create restaurant');

@@ -1,662 +1,179 @@
-import { useState, useEffect } from 'react';
-import { Plus, Package, AlertTriangle, TrendingDown } from 'lucide-react';
-import axios from 'axios';
+import { useState, useEffect } from 'react'
+import { Plus, AlertTriangle, TrendingDown, Search } from 'lucide-react'
+import { api } from '../services/api'
 
 interface Ingredient {
-  id: string;
-  name: string;
-  sku: string | null;
-  unit: string;
-  costPerUnit: number;
-  currentStock: number;
-  minStockLevel: number;
-  isLowStock: boolean;
-}
-
-interface LowStockAlert {
-  ingredientId: string;
-  ingredientName: string;
-  currentStock: number;
-  minStockLevel: number;
-  unit: string;
-  shortage: number;
-}
-
-interface Recipe {
-  id: string;
-  name: string;
-  productId: string;
-  totalCost: number;
-  items: Array<{
-    id: string;
-    ingredientId: string;
-    ingredientName: string;
-    quantity: number;
-    unit: string;
-    cost: number;
-  }>;
+  id: string
+  name: string
+  sku: string | null
+  unit: string
+  costPerUnit: number
+  currentStock: number
+  minStockLevel: number
+  isLowStock: boolean
 }
 
 export default function Inventory() {
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showStockModal, setShowStockModal] = useState(false);
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
-  const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
-  const [stockAdjustment, setStockAdjustment] = useState('');
-  const [isRestock, setIsRestock] = useState(false);
-  const [newIngredient, setNewIngredient] = useState({
-    name: '',
-    sku: '',
-    unit: 'kg',
-    costPerUnit: '',
-    minStockLevel: '',
-    initialStock: '',
-  });
-  const [newRecipe, setNewRecipe] = useState({
-    name: '',
-    productId: '',
-    items: [] as Array<{ ingredientId: string; quantity: string }>,
-  });
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showModal, setShowModal] = useState(false)
+  const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null)
+  const [showStockModal, setShowStockModal] = useState(false)
+  const [stockAdjustment, setStockAdjustment] = useState('')
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData() }, [])
 
   const loadData = async () => {
     try {
-      const token = localStorage.getItem('owner_token');
-      const restaurantId = localStorage.getItem('owner_restaurant_id');
-      const headers = { 
-        Authorization: `Bearer ${token}`,
-        'X-Restaurant-ID': restaurantId || ''
-      };
-      
-      // Load ingredients from API
-      const ingredientsRes = await axios.get('http://localhost:4000/api/v1/inventory/ingredients', { headers });
-      setIngredients(ingredientsRes.data.map((ing: { id: string; name: string; unit: string; costPerUnit: number; currentStock: number; minStock: number }) => ({
-        id: ing.id,
-        name: ing.name,
-        sku: null,
-        unit: ing.unit,
-        costPerUnit: ing.costPerUnit,
-        currentStock: ing.currentStock,
-        minStockLevel: ing.minStock,
-        isLowStock: ing.currentStock <= ing.minStock,
-      })));
-      
-      // Load low stock alerts from API
-      const alertsRes = await axios.get('http://localhost:4000/api/v1/inventory/low-stock', { headers });
-      setLowStockAlerts(alertsRes.data.map((alert: { id: string; name: string; currentStock: number; minStock: number; unit: string }) => ({
-        ingredientId: alert.id,
-        ingredientName: alert.name,
-        currentStock: alert.currentStock,
-        minStockLevel: alert.minStock,
-        unit: alert.unit,
-        shortage: alert.minStock - alert.currentStock,
-      })));
-      
-      // Load recipes from API
-      const recipesRes = await axios.get('http://localhost:4000/api/v1/inventory/recipes', { headers });
-      setRecipes(recipesRes.data);
-    } catch (error) {
-      console.error('Failed to load inventory:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAddIngredient = async () => {
-    try {
-      const token = localStorage.getItem('owner_token');
-      const restaurantId = localStorage.getItem('owner_restaurant_id');
-      await axios.post(
-        'http://localhost:4000/api/v1/inventory/ingredients',
-        {
-          name: newIngredient.name,
-          unit: newIngredient.unit,
-          currentStock: parseFloat(newIngredient.initialStock) || 0,
-          minStock: parseFloat(newIngredient.minStockLevel) || 0,
-          costPerUnit: parseFloat(newIngredient.costPerUnit) || 0,
-        },
-        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
-      );
-      
-      setShowAddModal(false);
-      setNewIngredient({
-        name: '',
-        sku: '',
-        unit: 'kg',
-        costPerUnit: '',
-        minStockLevel: '',
-        initialStock: '',
-      });
-      loadData();
-    } catch (error) {
-      console.error('Failed to add ingredient:', error);
-      alert('Failed to add ingredient. Please try again.');
-    }
-  };
-
-  const handleAdjustStock = async () => {
-    if (!selectedIngredient) return;
-    try {
-      const token = localStorage.getItem('owner_token');
-      const restaurantId = localStorage.getItem('owner_restaurant_id');
-      const adjustment = isRestock 
-        ? parseFloat(stockAdjustment) 
-        : -parseFloat(stockAdjustment);
-      
-      await axios.post(
-        `http://localhost:4000/api/v1/inventory/ingredients/${selectedIngredient.id}/adjust`,
-        {
-          adjustment,
-          reason: isRestock ? 'Restock' : 'Usage',
-        },
-        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
-      );
-      
-      setShowStockModal(false);
-      setStockAdjustment('');
-      setIsRestock(false);
-      setSelectedIngredient(null);
-      loadData();
-    } catch (error) {
-      console.error('Failed to adjust stock:', error);
-      alert('Failed to adjust stock. Please try again.');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg">Loading inventory...</div>
-      </div>
-    );
+      const res = await api.get('/inventory/ingredients')
+      setIngredients(res.data)
+    } catch (error) { console.error(error) } finally { setLoading(false) }
   }
 
+  const filtered = ingredients.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()))
+
+  const lowStockItems = ingredients.filter(i => i.currentStock <= i.minStockLevel)
+
+  if (loading) return <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div></div>
+
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-            <p className="text-gray-600 mt-1">Track ingredients, stock levels, and costs</p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowRecipeModal(true)}
-              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-            >
-              <Plus className="w-5 h-5" />
-              Add Recipe
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
-            >
-              <Plus className="w-5 h-5" />
-              Add Ingredient
-            </button>
-          </div>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Inventory Management</h1>
+          <p className="text-sm text-gray-500 mt-1">Track ingredients, stock levels, and costs</p>
         </div>
-
-        {/* Low Stock Alerts */}
-        {lowStockAlerts.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
-              <h2 className="text-xl font-semibold text-red-900">Low Stock Alerts</h2>
-              <span className="bg-red-600 text-white text-sm px-2 py-1 rounded-full">
-                {lowStockAlerts.length}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {lowStockAlerts.map((alert) => (
-                <div key={alert.ingredientId} className="bg-white rounded-lg p-4 border border-red-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{alert.ingredientName}</h3>
-                      <p className="text-sm text-gray-600">
-                        {alert.currentStock} {alert.unit} / {alert.minStockLevel} {alert.unit} minimum
-                      </p>
-                    </div>
-                    <TrendingDown className="w-5 h-5 text-red-600" />
-                  </div>
-                  <div className="mt-3">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Shortage</span>
-                      <span className="font-semibold text-red-600">{alert.shortage} {alert.unit}</span>
-                    </div>
-                    <div className="w-full bg-red-200 rounded-full h-2">
-                      <div
-                        className="bg-red-600 h-2 rounded-full"
-                        style={{
-                          width: `${Math.min((alert.currentStock / alert.minStockLevel) * 100, 100)}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Ingredients Table */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Ingredients ({ingredients.length})
-            </h2>
-          </div>
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  SKU
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Stock
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Unit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Cost/Unit
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {ingredients.map((ingredient) => (
-                <tr key={ingredient.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{ingredient.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    {ingredient.sku || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-semibold ${ingredient.isLowStock ? 'text-red-600' : 'text-gray-900'}`}>
-                        {ingredient.currentStock}
-                      </span>
-                      <span className="text-gray-500">/ {ingredient.minStockLevel}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    {ingredient.unit}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    ${ingredient.costPerUnit.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {ingredient.isLowStock ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                        Low Stock
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        In Stock
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => {
-                        setSelectedIngredient(ingredient);
-                        setShowStockModal(true);
-                      }}
-                      className="text-orange-600 hover:text-orange-900 font-medium text-sm"
-                    >
-                      Adjust Stock
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Recipes Section */}
-        <div className="bg-white rounded-lg shadow overflow-hidden mt-8">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Package className="w-5 h-5" />
-              Recipes ({recipes.length})
-            </h2>
-          </div>
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Recipe Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Product ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total Cost
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ingredients
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {recipes.map((recipe) => (
-                <tr key={recipe.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">{recipe.name}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    {recipe.productId}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">
-                    ${recipe.totalCost.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">
-                      {recipe.items.map((item) => (
-                        <div key={item.id}>
-                          {item.quantity} {item.unit} {item.ingredientName} (${item.cost.toFixed(2)})
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Add Ingredient Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">Add New Ingredient</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={newIngredient.name}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Ingredient name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">SKU (optional)</label>
-                  <input
-                    type="text"
-                    value={newIngredient.sku}
-                    onChange={(e) => setNewIngredient({ ...newIngredient, sku: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="SKU code"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                    <select
-                      value={newIngredient.unit}
-                      onChange={(e) => setNewIngredient({ ...newIngredient, unit: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    >
-                      <option value="kg">kg</option>
-                      <option value="L">L</option>
-                      <option value="g">g</option>
-                      <option value="ml">ml</option>
-                      <option value="unit">unit</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cost per Unit</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={newIngredient.costPerUnit}
-                      onChange={(e) => setNewIngredient({ ...newIngredient, costPerUnit: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock Level</label>
-                    <input
-                      type="number"
-                      value={newIngredient.minStockLevel}
-                      onChange={(e) => setNewIngredient({ ...newIngredient, minStockLevel: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Initial Stock</label>
-                    <input
-                      type="number"
-                      value={newIngredient.initialStock}
-                      onChange={(e) => setNewIngredient({ ...newIngredient, initialStock: e.target.value })}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                      placeholder="0"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowAddModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddIngredient}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-                >
-                  Add Ingredient
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Adjust Stock Modal */}
-        {showStockModal && selectedIngredient && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">Adjust Stock</h2>
-              <p className="text-gray-600 mb-4">
-                {selectedIngredient.name} - Current: {selectedIngredient.currentStock} {selectedIngredient.unit}
-              </p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adjustment Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={stockAdjustment}
-                    onChange={(e) => setStockAdjustment(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Use negative to reduce stock"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="restock"
-                    checked={isRestock}
-                    onChange={(e) => setIsRestock(e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="restock" className="text-sm text-gray-700">
-                    Mark as restock (updates last restocked date)
-                  </label>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowStockModal(false);
-                    setStockAdjustment('');
-                    setIsRestock(false);
-                    setSelectedIngredient(null);
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAdjustStock}
-                  className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition"
-                >
-                  Adjust Stock
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Add Recipe Modal */}
-        {showRecipeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-semibold mb-4">Add New Recipe</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Recipe Name</label>
-                  <input
-                    type="text"
-                    value={newRecipe.name}
-                    onChange={(e) => setNewRecipe({ ...newRecipe, name: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Recipe name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product ID</label>
-                  <input
-                    type="text"
-                    value={newRecipe.productId}
-                    onChange={(e) => setNewRecipe({ ...newRecipe, productId: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="Product ID"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Ingredients</label>
-                  {newRecipe.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 mb-2">
-                      <select
-                        value={item.ingredientId}
-                        onChange={(e) => {
-                          const updatedItems = [...newRecipe.items];
-                          updatedItems[idx] = { ...item, ingredientId: e.target.value };
-                          setNewRecipe({ ...newRecipe, items: updatedItems });
-                        }}
-                        className="flex-1 border border-gray-300 rounded-lg px-3 py-2"
-                      >
-                        <option value="">Select ingredient</option>
-                        {ingredients.map((ing) => (
-                          <option key={ing.id} value={ing.id}>
-                            {ing.name} ({ing.unit})
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const updatedItems = [...newRecipe.items];
-                          updatedItems[idx] = { ...item, quantity: e.target.value };
-                          setNewRecipe({ ...newRecipe, items: updatedItems });
-                        }}
-                        className="w-24 border border-gray-300 rounded-lg px-3 py-2"
-                        placeholder="Qty"
-                      />
-                      <button
-                        onClick={() => {
-                          const updatedItems = newRecipe.items.filter((_, i) => i !== idx);
-                          setNewRecipe({ ...newRecipe, items: updatedItems });
-                        }}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => setNewRecipe({ ...newRecipe, items: [...newRecipe.items, { ingredientId: '', quantity: '' }] })}
-                    className="text-blue-600 hover:text-blue-900 text-sm font-medium"
-                  >
-                    + Add Ingredient
-                  </button>
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setShowRecipeModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    try {
-                      const token = localStorage.getItem('owner_token');
-                      const restaurantId = localStorage.getItem('owner_restaurant_id');
-                      await axios.post(
-                        'http://localhost:4000/api/v1/inventory/recipes',
-                        {
-                          name: newRecipe.name,
-                          productId: newRecipe.productId,
-                          items: newRecipe.items.map(item => ({
-                            ingredientId: item.ingredientId,
-                            quantity: parseFloat(item.quantity) || 0,
-                          })),
-                        },
-                        { headers: { Authorization: `Bearer ${token}`, 'X-Restaurant-ID': restaurantId || '' } }
-                      );
-                      
-                      setShowRecipeModal(false);
-                      setNewRecipe({
-                        name: '',
-                        productId: '',
-                        items: [],
-                      });
-                      loadData();
-                    } catch (error) {
-                      console.error('Failed to create recipe:', error);
-                      alert('Failed to create recipe. Please try again.');
-                    }
-                  }}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                >
-                  Create Recipe
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition">
+          <Plus className="h-5 w-5" /> Add Ingredient
+        </button>
       </div>
+
+      {lowStockItems.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <h2 className="text-lg font-semibold text-red-900">Low Stock Alerts</h2>
+            <span className="bg-red-600 text-white text-sm px-2 py-1 rounded-full">{lowStockItems.length}</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {lowStockItems.map(item => (
+              <div key={item.id} className="bg-white rounded-lg p-4 border border-red-200">
+                <div className="flex justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{item.name}</h3>
+                    <p className="text-sm text-gray-600">{item.currentStock} / {item.minStockLevel} {item.unit}</p>
+                  </div>
+                  <TrendingDown className="h-5 w-5 text-red-600" />
+                </div>
+                <div className="mt-2 w-full bg-red-200 rounded-full h-2">
+                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${Math.min((item.currentStock / item.minStockLevel) * 100, 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search ingredients..."
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+          className="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white"
+        />
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Unit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cost/Unit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filtered.map(item => (
+                <tr key={item.id} className="hover:bg-gray-50 transition">
+                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{item.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={item.isLowStock ? 'text-red-600 font-semibold' : 'text-gray-900'}>{item.currentStock}</span>
+                    <span className="text-gray-400 ml-1">/ {item.minStockLevel}</span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">{item.unit}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-gray-600">${item.costPerUnit.toFixed(2)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {item.isLowStock ? <span className="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">Low Stock</span> : <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">In Stock</span>}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button onClick={() => { setSelectedIngredient(item); setShowStockModal(true) }} className="text-orange-600 hover:text-orange-900 text-sm font-medium">Adjust</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <h2 className="text-xl font-bold mb-4">Add Ingredient</h2>
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              const form = e.target as HTMLFormElement
+              const data = { name: (form.elements.namedItem('name') as HTMLInputElement).value, unit: (form.elements.namedItem('unit') as HTMLSelectElement).value, costPerUnit: parseFloat((form.elements.namedItem('cost') as HTMLInputElement).value), currentStock: parseFloat((form.elements.namedItem('stock') as HTMLInputElement).value), minStock: parseFloat((form.elements.namedItem('minStock') as HTMLInputElement).value) }
+              try { await api.post('/inventory/ingredients', data); setShowModal(false); loadData() } catch (error) { alert('Failed') }
+            }}>
+              <div className="space-y-4">
+                <div><label className="block text-sm font-medium text-gray-700">Name</label><input name="name" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" required /></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-medium text-gray-700">Unit</label><select name="unit" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"><option>kg</option><option>L</option><option>g</option><option>ml</option><option>unit</option></select></div>
+                  <div><label className="block text-sm font-medium text-gray-700">Cost/Unit</label><input name="cost" type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" required /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="block text-sm font-medium text-gray-700">Initial Stock</label><input name="stock" type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" required /></div>
+                  <div><label className="block text-sm font-medium text-gray-700">Min Stock Level</label><input name="minStock" type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" required /></div>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showStockModal && selectedIngredient && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
+            <h2 className="text-xl font-bold mb-4">Adjust Stock</h2>
+            <p className="text-gray-600 mb-4">{selectedIngredient.name} - Current: {selectedIngredient.currentStock} {selectedIngredient.unit}</p>
+            <form onSubmit={async (e) => {
+              e.preventDefault()
+              const adjustment = parseFloat(stockAdjustment)
+              try {
+                await api.post(`/inventory/ingredients/${selectedIngredient.id}/adjust`, { adjustment, reason: 'Manual adjustment' })
+                setShowStockModal(false); setStockAdjustment(''); loadData()
+              } catch (error) { alert('Failed') }
+            }}>
+              <div><label className="block text-sm font-medium text-gray-700">Adjustment Amount</label><input type="number" step="0.01" value={stockAdjustment} onChange={e => setStockAdjustment(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="Use negative to reduce" required /></div>
+              <div className="flex gap-3 mt-6">
+                <button type="button" onClick={() => { setShowStockModal(false); setStockAdjustment('') }} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700">Adjust</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  )
 }

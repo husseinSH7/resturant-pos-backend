@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, Building2, Users, Smartphone, Edit2, Trash2, Search } from 'lucide-react';
+import api from '../services/api';
 
 interface Restaurant {
   id: string;
@@ -35,76 +36,23 @@ export default function Restaurants() {
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'SUSPENDED' | 'TRIAL' | 'PAST_DUE'>('ALL');
 
   useEffect(() => {
-    // Mock data - replace with actual API calls
-    setTimeout(() => {
-      setRestaurants([
-        {
-          id: '1',
-          name: 'The Burger Joint',
-          slug: 'burger-joint',
-          ownerEmail: 'john@burgerjoint.com',
-          ownerName: 'John Smith',
-          plan: 'Premium',
-          status: 'ACTIVE',
-          screens: 3,
-          tables: 12,
-          staff: 8,
-          createdAt: '2024-01-01',
-          subscriptionEnds: '2024-02-01',
-        },
-        {
-          id: '2',
-          name: 'Pizza Palace',
-          slug: 'pizza-palace',
-          ownerEmail: 'sarah@pizzapalace.com',
-          ownerName: 'Sarah Johnson',
-          plan: 'Basic',
-          status: 'ACTIVE',
-          screens: 2,
-          tables: 8,
-          staff: 5,
-          createdAt: '2024-01-05',
-          subscriptionEnds: '2024-02-05',
-        },
-        {
-          id: '3',
-          name: 'Sushi Express',
-          slug: 'sushi-express',
-          ownerEmail: 'mike@sushiexpress.com',
-          ownerName: 'Mike Williams',
-          plan: 'Premium',
-          status: 'TRIAL',
-          screens: 1,
-          tables: 6,
-          staff: 4,
-          createdAt: '2024-01-10',
-          subscriptionEnds: '2024-01-24',
-        },
-        {
-          id: '4',
-          name: 'Taco Town',
-          slug: 'taco-town',
-          ownerEmail: 'emma@tacotown.com',
-          ownerName: 'Emma Davis',
-          plan: 'Basic',
-          status: 'PAST_DUE',
-          screens: 2,
-          tables: 10,
-          staff: 6,
-          createdAt: '2023-12-01',
-          subscriptionEnds: '2024-01-01',
-        },
-      ]);
-
-      setPlans([
-        { id: '1', name: 'Basic', maxScreens: 2, maxTables: 10, maxStaff: 5, price: 99 },
-        { id: '2', name: 'Premium', maxScreens: 5, maxTables: 25, maxStaff: 15, price: 199 },
-        { id: '3', name: 'Enterprise', maxScreens: 10, maxTables: 50, maxStaff: 30, price: 399 },
-      ]);
-
-      setLoading(false);
-    }, 1000);
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      const [restaurantsRes, plansRes] = await Promise.all([
+        api.get('/platform-admin/restaurants'),
+        api.get('/platform-admin/plans')
+      ]);
+      setRestaurants(restaurantsRes.data);
+      setPlans(plansRes.data);
+    } catch (error) {
+      console.error('Failed to load data', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredRestaurants = restaurants.filter(restaurant => {
     const matchesSearch = restaurant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,18 +72,34 @@ export default function Restaurants() {
     setShowCreateModal(true);
   };
 
-  const handleDeleteRestaurant = (id: string) => {
+  const handleDeleteRestaurant = async (id: string) => {
     if (confirm('Are you sure you want to delete this restaurant? This action cannot be undone.')) {
-      setRestaurants(restaurants.filter(r => r.id !== id));
+      try {
+        await api.delete(`/platform-admin/restaurants/${id}`);
+        setRestaurants(restaurants.filter(r => r.id !== id));
+      } catch (error) {
+        console.error('Failed to delete restaurant', error);
+        alert('Failed to delete restaurant. Please try again.');
+      }
     }
   };
 
-  const handleToggleStatus = (id: string) => {
-    setRestaurants(restaurants.map(r =>
-      r.id === id 
-        ? { ...r, status: r.status === 'ACTIVE' ? 'SUSPENDED' as const : 'ACTIVE' as const }
-        : r
-    ));
+  const handleToggleStatus = async (id: string) => {
+    try {
+      const restaurant = restaurants.find(r => r.id === id);
+      if (restaurant) {
+        const newStatus = restaurant.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+        await api.put(`/platform-admin/restaurants/${id}`, { status: newStatus });
+        setRestaurants(restaurants.map(r =>
+          r.id === id 
+            ? { ...r, status: newStatus as 'ACTIVE' | 'SUSPENDED' | 'TRIAL' | 'PAST_DUE' }
+            : r
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to toggle restaurant status', error);
+      alert('Failed to update restaurant status. Please try again.');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -294,25 +258,22 @@ export default function Restaurants() {
           restaurant={editingRestaurant}
           plans={plans}
           onClose={() => setShowCreateModal(false)}
-          onSave={(restaurantData) => {
-            if (editingRestaurant) {
-              setRestaurants(restaurants.map(r =>
-                r.id === editingRestaurant.id ? { ...r, ...restaurantData } : r
-              ));
-            } else {
-              const newRestaurant: Restaurant = {
-                id: Date.now().toString(),
-                ...restaurantData,
-                status: 'TRIAL',
-                screens: plans.find(p => p.name === restaurantData.plan)?.maxScreens || 2,
-                tables: plans.find(p => p.name === restaurantData.plan)?.maxTables || 10,
-                staff: plans.find(p => p.name === restaurantData.plan)?.maxStaff || 5,
-                createdAt: new Date().toISOString().split('T')[0],
-                subscriptionEnds: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-              } as Restaurant;
-              setRestaurants([...restaurants, newRestaurant]);
+          onSave={async (restaurantData) => {
+            try {
+              if (editingRestaurant) {
+                const res = await api.put(`/platform-admin/restaurants/${editingRestaurant.id}`, restaurantData);
+                setRestaurants(restaurants.map(r =>
+                  r.id === editingRestaurant.id ? { ...r, ...res.data } : r
+                ));
+              } else {
+                const res = await api.post('/platform-admin/restaurants', restaurantData);
+                setRestaurants([...restaurants, res.data]);
+              }
+              setShowCreateModal(false);
+            } catch (error) {
+              console.error('Failed to save restaurant', error);
+              alert('Failed to save restaurant. Please try again.');
             }
-            setShowCreateModal(false);
           }}
         />
       )}
