@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Save, Clock } from 'lucide-react'
+import { Save, Clock, Building2, Phone as Mail, DollarSign, Printer, Calendar } from 'lucide-react'
 import { api } from '../services/api'
+
+interface DayHours {
+  open: string
+  close: string
+  closed: boolean
+}
 
 interface Settings {
   restaurantName: string
@@ -9,26 +15,58 @@ interface Settings {
   restaurantEmail: string
   website: string
   taxRate: number
+  taxIncluded: boolean
   currency: string
+  locale: string
   receiptHeader: string
   receiptFooter: string
+  receiptShowCustomerInfo: boolean
+  receiptShowServerInfo: boolean
+  enableGratuity: boolean
+  gratuityRates: any[]
+  roundTo: string
   printerType: string
   printerIpAddress: string
   operatingHours: {
-    monday: { open: string; close: string; closed: boolean }
-    tuesday: { open: string; close: string; closed: boolean }
-    wednesday: { open: string; close: string; closed: boolean }
-    thursday: { open: string; close: string; closed: boolean }
-    friday: { open: string; close: string; closed: boolean }
-    saturday: { open: string; close: string; closed: boolean }
-    sunday: { open: string; close: string; closed: boolean }
+    [key: string]: DayHours
   }
 }
 
+const defaultOperatingHours: Settings['operatingHours'] = {
+  monday: { open: '09:00', close: '22:00', closed: false },
+  tuesday: { open: '09:00', close: '22:00', closed: false },
+  wednesday: { open: '09:00', close: '22:00', closed: false },
+  thursday: { open: '09:00', close: '22:00', closed: false },
+  friday: { open: '09:00', close: '22:00', closed: false },
+  saturday: { open: '09:00', close: '22:00', closed: false },
+  sunday: { open: '09:00', close: '22:00', closed: false },
+}
+
 export default function Settings() {
-  const [settings, setSettings] = useState<Settings | null>(null)
+  const [settings, setSettings] = useState<Settings>({
+    restaurantName: '',
+    restaurantAddress: '',
+    restaurantPhone: '',
+    restaurantEmail: '',
+    website: '',
+    taxRate: 8,
+    taxIncluded: false,
+    currency: 'USD',
+    locale: 'en-US',
+    receiptHeader: '',
+    receiptFooter: '',
+    receiptShowCustomerInfo: true,
+    receiptShowServerInfo: true,
+    enableGratuity: false,
+    gratuityRates: [],
+    roundTo: 'NONE',
+    printerType: 'thermal',
+    printerIpAddress: '',
+    operatingHours: defaultOperatingHours,
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState<'general' | 'tax' | 'receipt' | 'printer' | 'hours'>('general')
 
   useEffect(() => { loadSettings() }, [])
@@ -36,101 +74,326 @@ export default function Settings() {
   const loadSettings = async () => {
     try {
       const res = await api.get('/settings')
-      setSettings(res.data)
-    } catch (error) { console.error(error) } finally { setLoading(false) }
+      const data = res.data
+
+      setSettings({
+        restaurantName: data.restaurantName || '',
+        restaurantAddress: data.restaurantAddress || '',
+        restaurantPhone: data.restaurantPhone || '',
+        restaurantEmail: data.restaurantEmail || '',
+        website: data.website || '',
+        taxRate: data.taxRate !== undefined ? data.taxRate : 8,
+        taxIncluded: data.taxIncluded ?? false,
+        currency: data.currency || 'USD',
+        locale: data.locale || 'en-US',
+        receiptHeader: data.receiptHeader || '',
+        receiptFooter: data.receiptFooter || '',
+        receiptShowCustomerInfo: data.receiptShowCustomerInfo ?? true,
+        receiptShowServerInfo: data.receiptShowServerInfo ?? true,
+        enableGratuity: data.enableGratuity ?? false,
+        gratuityRates: data.gratuityRates || [],
+        roundTo: data.roundTo || 'NONE',
+        printerType: data.printerType || 'thermal',
+        printerIpAddress: data.printerIpAddress || '',
+        operatingHours: data.operatingHours || defaultOperatingHours,
+      })
+    } catch (err: any) {
+      console.error('Failed to load settings', err)
+      setError('Could not load settings. Using defaults.')
+      // Keep default settings
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSave = async () => {
-    if (!settings) return
     setSaving(true)
+    setError('')
     try {
       await api.put('/settings', settings)
       alert('Settings saved!')
-    } catch (error) { alert('Save failed') } finally { setSaving(false) }
+    } catch (err: any) {
+      const message = err?.response?.data?.message || err.message || 'Save failed'
+      setError('Save failed: ' + message)
+      alert('Save failed: ' + message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if (loading) return <div className="flex justify-center p-12"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div></div>
-  if (!settings) return <div className="text-center p-12 text-gray-500">No settings found</div>
+  if (loading) {
+    return (
+      <div className="flex justify-center p-12">
+        <div className="relative">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+          <div className="absolute top-0 left-0 animate-ping rounded-full h-12 w-12 border-2 border-orange-400 opacity-20"></div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage your restaurant configuration</p>
+          <h1 className="text-3xl font-bold bg-linear-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">Settings</h1>
+          <p className="text-sm text-gray-500 mt-2">Manage your restaurant configuration</p>
         </div>
-        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition disabled:opacity-50">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 bg-linear-to-r from-orange-500 to-orange-600 text-white px-5 py-2.5 rounded-xl hover:from-orange-600 hover:to-orange-700 transition-all duration-200 hover:scale-105 shadow-lg shadow-orange-500/30 disabled:opacity-50 disabled:hover:scale-100"
+        >
           <Save className="h-5 w-5" /> {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
 
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-8">
-          {['general', 'tax', 'receipt', 'printer', 'hours'].map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab as any)} className={`py-4 px-1 border-b-2 font-medium text-sm transition ${activeTab === tab ? 'border-orange-600 text-orange-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="flex gap-6 overflow-x-auto">
+          {['general', 'tax', 'receipt', 'printer', 'hours'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as any)}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition-all duration-200 whitespace-nowrap ${
+                activeTab === tab
+                  ? 'border-orange-600 text-orange-600'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </nav>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow duration-300">
         {activeTab === 'general' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">General Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700">Restaurant Name</label><input value={settings.restaurantName} onChange={e => setSettings({ ...settings, restaurantName: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-              <div><label className="block text-sm font-medium text-gray-700">Phone</label><input value={settings.restaurantPhone} onChange={e => setSettings({ ...settings, restaurantPhone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-              <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700">Address</label><input value={settings.restaurantAddress} onChange={e => setSettings({ ...settings, restaurantAddress: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-              <div><label className="block text-sm font-medium text-gray-700">Email</label><input value={settings.restaurantEmail} onChange={e => setSettings({ ...settings, restaurantEmail: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-              <div><label className="block text-sm font-medium text-gray-700">Website</label><input value={settings.website} onChange={e => setSettings({ ...settings, website: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                <Building2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">General Information</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Restaurant Name</label>
+                <input
+                  value={settings.restaurantName}
+                  onChange={(e) => setSettings({ ...settings, restaurantName: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Phone</label>
+                <input
+                  value={settings.restaurantPhone}
+                  onChange={(e) => setSettings({ ...settings, restaurantPhone: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Address</label>
+                <input
+                  value={settings.restaurantAddress}
+                  onChange={(e) => setSettings({ ...settings, restaurantAddress: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                <input
+                  value={settings.restaurantEmail}
+                  onChange={(e) => setSettings({ ...settings, restaurantEmail: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Website</label>
+                <input
+                  value={settings.website}
+                  onChange={(e) => setSettings({ ...settings, website: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'tax' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Tax & Currency</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700">Tax Rate (%)</label><input type="number" step="0.1" value={settings.taxRate} onChange={e => setSettings({ ...settings, taxRate: parseFloat(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-              <div><label className="block text-sm font-medium text-gray-700">Currency</label><select value={settings.currency} onChange={e => setSettings({ ...settings, currency: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"><option>USD</option><option>EUR</option><option>GBP</option><option>CAD</option><option>AUD</option></select></div>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Tax & Currency</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tax Rate (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={settings.taxRate}
+                  onChange={(e) => setSettings({ ...settings, taxRate: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Currency</label>
+                <select
+                  value={settings.currency}
+                  onChange={(e) => setSettings({ ...settings, currency: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                >
+                  <option>USD</option>
+                  <option>EUR</option>
+                  <option>GBP</option>
+                  <option>CAD</option>
+                  <option>AUD</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'receipt' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Receipt Settings</h2>
-            <div><label className="block text-sm font-medium text-gray-700">Header</label><textarea rows={2} value={settings.receiptHeader} onChange={e => setSettings({ ...settings, receiptHeader: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
-            <div><label className="block text-sm font-medium text-gray-700">Footer</label><textarea rows={2} value={settings.receiptFooter} onChange={e => setSettings({ ...settings, receiptFooter: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" /></div>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <Mail className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Receipt Settings</h2>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Header</label>
+                <textarea
+                  rows={3}
+                  value={settings.receiptHeader}
+                  onChange={(e) => setSettings({ ...settings, receiptHeader: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Footer</label>
+                <textarea
+                  rows={3}
+                  value={settings.receiptFooter}
+                  onChange={(e) => setSettings({ ...settings, receiptFooter: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                />
+              </div>
+            </div>
           </div>
         )}
 
         {activeTab === 'printer' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Printer Settings</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-gray-700">Printer Type</label><select value={settings.printerType} onChange={e => setSettings({ ...settings, printerType: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"><option>thermal</option><option>inkjet</option><option>laser</option></select></div>
-              <div><label className="block text-sm font-medium text-gray-700">IP Address</label><input value={settings.printerIpAddress} onChange={e => setSettings({ ...settings, printerIpAddress: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500" placeholder="192.168.1.100" /></div>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                <Printer className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Printer Settings</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Printer Type</label>
+                <select
+                  value={settings.printerType}
+                  onChange={(e) => setSettings({ ...settings, printerType: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                >
+                  <option>thermal</option>
+                  <option>inkjet</option>
+                  <option>laser</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Address</label>
+                <input
+                  value={settings.printerIpAddress}
+                  onChange={(e) => setSettings({ ...settings, printerIpAddress: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-gray-800 transition-all duration-200"
+                  placeholder="192.168.1.100"
+                />
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === 'hours' && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Operating Hours</h2>
-            {Object.entries(settings.operatingHours).map(([day, hours]) => (
-              <div key={day} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                <div className="w-24 font-medium capitalize text-gray-900">{day}</div>
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-gray-400" />
-                  <input type="time" value={hours.open} disabled={hours.closed} onChange={e => setSettings({ ...settings, operatingHours: { ...settings.operatingHours, [day]: { ...hours, open: e.target.value } } })} className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50" />
-                  <span className="text-gray-500">to</span>
-                  <input type="time" value={hours.close} disabled={hours.closed} onChange={e => setSettings({ ...settings, operatingHours: { ...settings.operatingHours, [day]: { ...hours, close: e.target.value } } })} className="px-3 py-1.5 border border-gray-300 rounded-lg disabled:opacity-50" />
-                </div>
-                <label className="flex items-center gap-2 ml-2"><input type="checkbox" checked={hours.closed} onChange={e => setSettings({ ...settings, operatingHours: { ...settings.operatingHours, [day]: { ...hours, closed: e.target.checked } } })} className="rounded" /> Closed</label>
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-yellow-100 dark:bg-yellow-900/30 rounded-lg">
+                <Calendar className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
               </div>
-            ))}
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Operating Hours</h2>
+            </div>
+            <div className="space-y-3">
+              {Object.entries(settings.operatingHours).map(([day, hours]) => (
+                <div key={day} className="flex items-center gap-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                  <div className="w-28 font-semibold capitalize text-gray-900 dark:text-white">{day}</div>
+                  <div className="flex items-center gap-3 flex-1">
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <input
+                      type="time"
+                      value={hours.open}
+                      disabled={hours.closed}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          operatingHours: {
+                            ...settings.operatingHours,
+                            [day]: { ...hours, open: e.target.value },
+                          },
+                        })
+                      }
+                      className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-50 bg-white dark:bg-gray-800 transition-all duration-200"
+                    />
+                    <span className="text-gray-500 dark:text-gray-400">to</span>
+                    <input
+                      type="time"
+                      value={hours.close}
+                      disabled={hours.closed}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          operatingHours: {
+                            ...settings.operatingHours,
+                            [day]: { ...hours, close: e.target.value },
+                          },
+                        })
+                      }
+                      className="px-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg disabled:opacity-50 bg-white dark:bg-gray-800 transition-all duration-200"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hours.closed}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          operatingHours: {
+                            ...settings.operatingHours,
+                            [day]: { ...hours, closed: e.target.checked },
+                          },
+                        })
+                      }
+                      className="rounded text-orange-600 focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Closed</span>
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

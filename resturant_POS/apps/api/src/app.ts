@@ -15,7 +15,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
       "http://localhost:19006",
       "http://localhost:8081",           // Expo web Metro
       "exp://*",                          // Expo Go (any host)
-      "http://192.168.*:*",               // any local IP (development)
+      "http://192.168.*:*",
+      "http://localhost:5173",             // any local IP (development)
     ];
 
 app.use(

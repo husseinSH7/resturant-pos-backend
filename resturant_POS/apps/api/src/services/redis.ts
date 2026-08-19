@@ -1,44 +1,33 @@
-import Redis from 'ioredis';
+import { Redis } from '@upstash/redis';
 
 let client: Redis | null = null;
 let isRedisAvailable = true;
 
 function getRedisClient(): Redis | null {
   if (!isRedisAvailable) return null;
-  
+
   if (!client) {
     try {
-      client = new Redis({
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD || undefined,
-        db: parseInt(process.env.REDIS_DB || '0'),
-        lazyConnect: true,
-        retryStrategy: (times) => {
-          if (times > 3) {
-            isRedisAvailable = false;
-            console.warn('⚠️ Redis unavailable – caching disabled. API continues normally.');
-            return null;
-          }
-          return Math.min(times * 100, 2000);
-        },
-      });
+      const url = process.env.UPSTASH_REDIS_REST_URL;
+      const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-      client.on('error', (err) => {
-        if (err.code === 'ECONNREFUSED') {
-          isRedisAvailable = false;
-          console.warn('⚠️ Redis connection refused – caching disabled.');
-        }
-      });
-
-      // Try to connect once
-      client.connect().catch(() => {
+      if (!url || !token) {
+        console.warn('⚠️ Upstash Redis credentials missing – caching disabled.');
         isRedisAvailable = false;
-        console.warn('⚠️ Redis connection failed – caching disabled.');
+        return null;
+      }
+
+      client = new Redis({
+        url,
+        token,
+        retry: {
+          retries: 3,
+          backoff: (retryCount) => Math.min(retryCount * 100, 2000),
+        },
       });
     } catch (_) {
       isRedisAvailable = false;
-      console.warn('⚠️ Redis unavailable – caching disabled.');
+      console.warn('⚠️ Upstash Redis setup failed – caching disabled.');
       return null;
     }
   }
@@ -51,7 +40,7 @@ export const cache = {
     if (!redis) return null;
     try {
       const data = await redis.get(key);
-      return data ? JSON.parse(data) : null;
+      return data ? (data as T) : null;
     } catch {
       return null;
     }
@@ -61,7 +50,7 @@ export const cache = {
     const redis = getRedisClient();
     if (!redis) return;
     try {
-      await redis.setex(key, ttlSeconds, JSON.stringify(value));
+      await redis.set(key, value, { ex: ttlSeconds });
     } catch {}
   },
 
