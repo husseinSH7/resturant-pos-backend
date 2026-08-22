@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   LayoutDashboard,
-  ShoppingCart,
   Table2,
   UtensilsCrossed,
   Users,
@@ -12,7 +11,6 @@ import {
   BarChart3,
   Smartphone,
   Settings,
-  ChefHat,
 } from 'lucide-react'
 
 const navSections = [
@@ -20,10 +18,8 @@ const navSections = [
     title: 'Operations',
     items: [
       { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-      { to: '/orders', label: 'Orders', icon: ShoppingCart },
       { to: '/tables', label: 'Tables', icon: Table2 },
       { to: '/menu', label: 'Menu', icon: UtensilsCrossed },
-      { to: '/kitchen', label: 'Kitchen', icon: ChefHat },
     ],
   },
   {
@@ -53,9 +49,9 @@ const navSections = [
 
 export default function Layout() {
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+      <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0 h-full">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h1 className="text-xl font-bold text-orange-600">Restaurant POS</h1>
         </div>
@@ -89,10 +85,12 @@ export default function Layout() {
         </nav>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-6">
-        <Outlet />
-      </main>
+      {/* Main content - THIS is the fix */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
+        <div className="flex-1 overflow-y-auto p-6">
+          <Outlet />
+        </div>
+      </div>
     </div>
   )
 }

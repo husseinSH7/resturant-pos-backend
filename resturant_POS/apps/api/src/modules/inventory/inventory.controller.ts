@@ -4,14 +4,12 @@ import {
   createIngredient,
   updateIngredient,
   adjustStock,
+  deleteIngredient,
   getLowStockAlerts,
   getRecipes,
   createRecipe,
 } from "./inventory.service.js";
 
-/**
- * Helper: extracts and validates the restaurantId from the authenticated user.
- */
 function getRestaurantId(req: Request): string {
   const id = req.user?.restaurantId;
   if (!id) {
@@ -39,7 +37,6 @@ export async function createIngredientController(req: Request, res: Response) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // Only include optional fields if they are defined
     const ingredientData: Record<string, unknown> = {
       name,
       unit,
@@ -67,7 +64,6 @@ export async function updateIngredientController(req: Request, res: Response) {
 
     const { name, unit, currentStock, minStock, costPerUnit, supplier } = req.body;
 
-    // Build data object only with provided fields
     const data: Record<string, unknown> = {};
     if (name !== undefined) data.name = name;
     if (unit !== undefined) data.unit = unit;
@@ -104,6 +100,19 @@ export async function adjustStockController(req: Request, res: Response) {
   }
 }
 
+export async function deleteIngredientController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = req.params.id;
+    if (typeof id !== "string") return res.status(400).json({ message: "Ingredient ID is required" });
+    await deleteIngredient(restaurantId, id);
+    res.status(204).send();
+  } catch (error: any) {
+    const status = error.status || 400;
+    res.status(status).json({ message: error.message || "Failed to delete ingredient" });
+  }
+}
+
 export async function lowStockAlerts(req: Request, res: Response) {
   try {
     const restaurantId = getRestaurantId(req);
@@ -133,11 +142,7 @@ export async function createRecipeController(req: Request, res: Response) {
     if (!name || !productId || !items || !Array.isArray(items)) {
       return res.status(400).json({ message: "Missing required fields" });
     }
-    const data = await createRecipe(restaurantId, {
-      name,
-      productId,
-      items,
-    });
+    const data = await createRecipe(restaurantId, { name, productId, items });
     res.status(201).json(data);
   } catch (error: any) {
     const status = error.status || 400;

@@ -24,9 +24,7 @@ export async function update(req: Request, res: Response) {
       return res.status(400).json({ message: "Restaurant ID is required" });
     }
 
-    // Validate request body
     const validatedData = updateSettingsSchema.parse(req.body);
-
     const settings = await updateSettings(restaurantId, validatedData);
     res.json(settings);
   } catch (error: any) {

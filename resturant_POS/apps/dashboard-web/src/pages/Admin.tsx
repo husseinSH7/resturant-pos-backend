@@ -52,7 +52,6 @@ export default function Admin() {
         pendingReservations: reservationsRes.data.length,
       })
 
-      // Get last 5 orders
       setRecentOrders(orders.slice(0, 5))
     } catch (error) {
       console.error('Failed to load dashboard', error)
@@ -64,7 +63,7 @@ export default function Admin() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
       </div>
     )
   }
@@ -72,8 +71,8 @@ export default function Admin() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">Welcome back! Here's what's happening today</p>
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <p className="text-sm text-gray-400 mt-1">Welcome back! Here's what's happening today</p>
       </div>
 
       {/* Stats Grid */}
@@ -109,8 +108,8 @@ export default function Admin() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <QuickAction to="/tables" icon={<Table2 className="h-6 w-6" />} label="Manage Tables" />
           <QuickAction to="/staff" icon={<Users className="h-6 w-6" />} label="Staff Schedule" />
@@ -120,39 +119,39 @@ export default function Admin() {
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900">Recent Orders</h2>
-          <Link to="/analytics" className="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1">
+      <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+          <h2 className="text-lg font-semibold text-white">Recent Orders</h2>
+          <Link to="/analytics" className="text-sm text-orange-400 hover:text-orange-300 font-medium flex items-center gap-1">
             View all <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-700">
+            <thead className="bg-gray-700/50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Order ID</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Customer</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">Time</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-gray-800 divide-y divide-gray-700">
               {recentOrders.length === 0 ? (
-                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No recent orders</td></tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-400">No recent orders</td></tr>
               ) : (
                 recentOrders.map((order: any) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition">
-                    <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-900">#{order.id.slice(0, 8)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">{order.customerName || 'Guest'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${(order.total || 0).toFixed(2)}</td>
+                  <tr key={order.id} className="hover:bg-gray-700/50 transition">
+                    <td className="px-6 py-4 whitespace-nowrap font-mono text-sm text-gray-300">#{order.id.slice(0, 8)}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-300">{order.customerName || 'Guest'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-white">${(order.total || 0).toFixed(2)}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-900/30 text-green-400">
                         {order.status || 'PAID'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
                       {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </td>
                   </tr>
@@ -164,8 +163,8 @@ export default function Admin() {
       </div>
 
       {/* System Status */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">System Status</h2>
+      <div className="bg-gray-800 rounded-xl border border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">System Status</h2>
         <div className="flex flex-wrap gap-6">
           <StatusItem label="API Server" status="online" />
           <StatusItem label="Database" status="online" />
@@ -179,21 +178,21 @@ export default function Admin() {
 
 function StatCard({ title, value, icon, color, subtitle }: any) {
   const colorMap: any = {
-    green: 'bg-green-100 text-green-600',
-    orange: 'bg-orange-100 text-orange-600',
-    blue: 'bg-blue-100 text-blue-600',
-    red: 'bg-red-100 text-red-600',
-    purple: 'bg-purple-100 text-purple-600',
+    green: 'bg-green-900/30 text-green-400',
+    orange: 'bg-orange-900/30 text-orange-400',
+    blue: 'bg-blue-900/30 text-blue-400',
+    red: 'bg-red-900/30 text-red-400',
+    purple: 'bg-purple-900/30 text-purple-400',
   }
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+    <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 hover:shadow-lg hover:border-gray-600 transition-all duration-200">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+          <p className="text-sm font-medium text-gray-400">{title}</p>
+          <p className="text-2xl font-bold text-white mt-1">{value}</p>
+          {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
         </div>
-        <div className={`p-2.5 rounded-lg ${colorMap[color] || 'bg-gray-100 text-gray-600'}`}>
+        <div className={`p-2.5 rounded-lg ${colorMap[color] || 'bg-gray-700 text-gray-400'}`}>
           {icon}
         </div>
       </div>
@@ -205,10 +204,10 @@ function QuickAction({ to, icon, label }: any) {
   return (
     <Link
       to={to}
-      className="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-xl hover:bg-orange-50 hover:border-orange-200 transition border-2 border-transparent group"
+      className="flex flex-col items-center justify-center p-6 bg-gray-700/50 rounded-xl hover:bg-gray-700 hover:border-orange-600 transition border-2 border-transparent group"
     >
-      <div className="text-gray-400 group-hover:text-orange-600 transition">{icon}</div>
-      <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700 mt-2">{label}</span>
+      <div className="text-gray-400 group-hover:text-orange-400 transition">{icon}</div>
+      <span className="text-sm font-medium text-gray-300 group-hover:text-white mt-2">{label}</span>
     </Link>
   )
 }
@@ -223,8 +222,8 @@ function StatusItem({ label, status }: any) {
   return (
     <div className="flex items-center gap-3">
       <div className={`w-3 h-3 rounded-full ${config.color}`} />
-      <span className="text-sm text-gray-700">{label}</span>
-      <span className="text-xs text-gray-400">({config.text})</span>
+      <span className="text-sm text-gray-300">{label}</span>
+      <span className="text-xs text-gray-500">({config.text})</span>
     </div>
   )
 }

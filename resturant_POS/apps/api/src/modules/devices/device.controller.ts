@@ -1,123 +1,102 @@
 import type { Request, Response } from "express";
-import { prisma } from "../../prisma.js";
-import { DeviceType } from "@prisma/client";
+import * as deviceService from "./devices.service.js";
+import { createDeviceSchema, updateDeviceSchema } from "./devices.schemas.js";
 
-export async function registerDevice(req: Request, res: Response) {
-  try {
-    const { deviceId, deviceType, name } = req.body;
-
-    if (!req.user?.restaurantId) {
-      res.status(401).json({ message: "Unauthorized: no restaurant context" });
-      return;
-    }
-
-    // Build data object, only include 'name' if it's provided
-    const data: Record<string, unknown> = {
-      restaurantId: req.user.restaurantId,
-      deviceId,
-      deviceType: deviceType as DeviceType,
-      lastSeenAt: new Date(),
-    };
-    if (name !== undefined) {
-      data.name = name;
-    }
-
-    const device = await prisma.device.create({ data: data as any });
-    res.status(201).json(device);
-  } catch (error) {
-    console.error("Error registering device:", error);
-    res.status(500).json({ message: "Failed to register device" });
+function getRestaurantId(req: Request): string {
+  const id = req.user?.restaurantId;
+  if (!id) {
+    throw { status: 400, message: "User not associated with a restaurant" };
   }
+  return id;
 }
 
+function getParamId(req: Request): string {
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    throw { status: 400, message: "Invalid or missing ID" };
+  }
+  return id;
+}
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const result = {} as T;
+  for (const key in obj) {
+    if (obj[key] !== undefined) result[key] = obj[key];
+  }
+  return result;
+}
+
+// ===== LIST =====
 export async function listDevices(req: Request, res: Response) {
   try {
-    if (!req.user?.restaurantId) {
-      res.status(401).json({ message: "Unauthorized: no restaurant context" });
-      return;
-    }
-
-    const devices = await prisma.device.findMany({
-      where: { restaurantId: req.user.restaurantId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    res.json(devices);
-  } catch (error) {
-    console.error("Error listing devices:", error);
-    res.status(500).json({ message: "Failed to list devices" });
+    const restaurantId = getRestaurantId(req);
+    const data = await deviceService.listDevices(restaurantId);
+    res.json(data);
+  } catch (error: any) {
+    res.status(error.status || 500).json({ message: error.message || "Failed to load devices" });
   }
 }
 
-export async function updateDevice(req: Request, res: Response) {
+// ===== CREATE =====
+export async function createDeviceController(req: Request, res: Response) {
   try {
-    if (!req.user?.restaurantId) {
-      res.status(401).json({ message: "Unauthorized: no restaurant context" });
-      return;
-    }
-
-    const id = req.params.id;
-    if (typeof id !== "string") {
-      res.status(400).json({ message: "Invalid device ID" });
-      return;
-    }
-
-    const { name, isActive } = req.body;
-
-    // Build update data, only include properties that are defined
-    const updateData: Record<string, unknown> = {};
-    if (name !== undefined) updateData.name = name;
-    if (isActive !== undefined) updateData.isActive = isActive;
-
-    const device = await prisma.device.updateMany({
-      where: { 
-        id,
-        restaurantId: req.user.restaurantId 
-      },
-      data: updateData,
-    });
-
-    if (device.count === 0) {
-      res.status(404).json({ message: "Device not found" });
-      return;
-    }
-
-    const updatedDevice = await prisma.device.findUnique({
-      where: { id },
-    });
-
-    res.json(updatedDevice);
-  } catch (error) {
-    console.error("Error updating device:", error);
-    res.status(500).json({ message: "Failed to update device" });
+    const restaurantId = getRestaurantId(req);
+    const parsed = createDeviceSchema.parse(req.body);
+    const data = stripUndefined(parsed) as any;
+    const device = await deviceService.createDevice(restaurantId, data);
+    res.status(201).json(device);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Failed to create device" });
   }
 }
 
-export async function heartbeat(req: Request, res: Response) {
+// ===== UPDATE =====
+export async function updateDeviceController(req: Request, res: Response) {
   try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    const parsed = updateDeviceSchema.parse(req.body);
+    const data = stripUndefined(parsed) as any;
+    const device = await deviceService.updateDevice(id, restaurantId, data);
+    res.json(device);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Failed to update device" });
+  }
+}
+
+// ===== DELETE =====
+export async function deleteDeviceController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    await deviceService.deleteDevice(id, restaurantId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Failed to delete device" });
+  }
+}
+
+// ===== TEST PRINT =====
+export async function testPrintController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    const result = await deviceService.testPrintDevice(id, restaurantId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Test print failed" });
+  }
+}
+
+// ===== HEARTBEAT =====
+export async function heartbeatController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
     const { deviceId } = req.body;
-
-    if (!req.user?.restaurantId) {
-      res.status(401).json({ message: "Unauthorized: no restaurant context" });
-      return;
-    }
-
-    const device = await prisma.device.updateMany({
-      where: { 
-        deviceId,
-        restaurantId: req.user.restaurantId 
-      },
-      data: { lastSeenAt: new Date() },
-    });
-
-    if (device.count === 0) {
-      res.status(404).json({ message: "Device not found" });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Error updating device heartbeat:", error);
-    res.status(500).json({ message: "Failed to update heartbeat" });
+    if (!deviceId) throw { status: 400, message: "deviceId is required" };
+    const result = await deviceService.heartbeat(restaurantId, deviceId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Heartbeat failed" });
   }
 }

@@ -4,6 +4,7 @@ import {
   createIngredientController,
   updateIngredientController,
   adjustStockController,
+  deleteIngredientController,
   lowStockAlerts,
   listRecipes,
   createRecipeController,
@@ -19,6 +20,8 @@ router.get("/ingredients", listIngredients);
 router.post("/ingredients", createIngredientController);
 router.put("/ingredients/:id", updateIngredientController);
 router.post("/ingredients/:id/stock", adjustStockController);
+router.post("/ingredients/:id/adjust", adjustStockController); // alias for frontend
+router.delete("/ingredients/:id", deleteIngredientController);
 router.get("/ingredients/low-stock", lowStockAlerts);
 
 // Recipes

@@ -71,16 +71,38 @@ export async function createReservation(restaurantId: string, data: {
   notes?: string;
   specialRequests?: string;
 }) {
-  // Check if the requested time slot is available
-  const requestedDateTime = new Date(`${data.date}T${data.time}`);
-  const endTime = new Date(requestedDateTime.getTime() + 2 * 60 * 60 * 1000); // 2 hours reservation
+  // Validate
+  if (!data.date || !data.time) {
+    throw new Error("Date and time are required");
+  }
+
+  // Build a valid Date from the provided date and time.
+  let parsedDate: Date;
+  const timeStr = data.time; // could be "18:30" or an ISO string
+
+  // If the time string already contains 'T', treat it as a full ISO datetime.
+  if (timeStr.includes('T')) {
+    parsedDate = new Date(timeStr);
+  } else {
+    // Otherwise combine date (YYYY-MM-DD) and time (HH:mm)
+    const formattedTime = timeStr.length === 4 ? `0${timeStr}` : timeStr;
+    const dateTimeString = `${data.date}T${formattedTime}`;
+    parsedDate = new Date(dateTimeString);
+  }
+
+  if (isNaN(parsedDate.getTime())) {
+    throw new Error(`Invalid date/time format: date=${data.date}, time=${data.time}`);
+  }
+
+  // Conflict check (2 hour window)
+  const endTime = new Date(parsedDate.getTime() + 2 * 60 * 60 * 1000);
 
   const conflictingReservations = await prisma.reservation.findMany({
     where: {
       restaurantId,
       status: { in: ["CONFIRMED", "SEATED"] },
       date: {
-        gte: requestedDateTime,
+        gte: parsedDate,
         lte: endTime,
       },
     },
@@ -90,6 +112,7 @@ export async function createReservation(restaurantId: string, data: {
     throw new Error("Time slot is not available");
   }
 
+  // Create reservation – store the same full datetime in both date and time fields
   const reservation = await prisma.reservation.create({
     data: {
       id: crypto.randomUUID(),
@@ -99,8 +122,8 @@ export async function createReservation(restaurantId: string, data: {
       customerEmail: data.customerEmail || null,
       customerId: data.customerId || null,
       guestCount: data.guestCount,
-      date: new Date(data.date),
-      time: new Date(data.time),
+      date: parsedDate,
+      time: parsedDate,
       tableId: data.tableId || null,
       notes: data.notes || null,
       specialRequests: data.specialRequests || null,
@@ -112,7 +135,7 @@ export async function createReservation(restaurantId: string, data: {
     },
   });
 
-  // Send confirmation notifications (SMS/Email)
+  // Send notifications (non-blocking)
   try {
     const notificationData: any = {
       customerName: reservation.customerName,
@@ -124,10 +147,9 @@ export async function createReservation(restaurantId: string, data: {
     if (reservation.customerEmail) notificationData.customerEmail = reservation.customerEmail;
     if (reservation.tableId) notificationData.tableId = reservation.tableId;
     
-    await sendReservationConfirmation(restaurantId, notificationData, "Restaurant Name"); // TODO: Get actual restaurant name
+    await sendReservationConfirmation(restaurantId, notificationData, "Restaurant Name");
   } catch (error) {
     console.error("Failed to send reservation confirmation:", error);
-    // Don't fail the reservation if notifications fail
   }
 
   return {
@@ -166,23 +188,16 @@ export async function updateReservationStatus(
   if (!reservation) throw new Error("Reservation not found");
 
   const updated = await prisma.$transaction(async (tx) => {
-    // Update reservation status
     const updatedReservation = await tx.reservation.update({
       where: { id: reservationId },
       data: { status },
     });
 
-    // If seating, update table status
     if (status === "SEATED" && reservation.Table) {
       await tx.table.update({
         where: { id: reservation.Table.id },
         data: { status: TableStatus.OCCUPIED },
       });
-    }
-
-    // If no-show, mark as such
-    if (status === "NO_SHOW") {
-      // Could add customer penalty logic here
     }
 
     return updatedReservation;
@@ -204,7 +219,6 @@ export async function checkAvailability(
   const nextDay = new Date(targetDate);
   nextDay.setDate(nextDay.getDate() + 1);
 
-  // Get all reservations for the day
   const reservations = await prisma.reservation.findMany({
     where: {
       restaurantId,
@@ -217,19 +231,16 @@ export async function checkAvailability(
     include: { Table: true },
   });
 
-  // Get all tables
   const tables = await prisma.table.findMany({
     where: { restaurantId, isActive: true },
   });
 
-  // Calculate available time slots (every 30 minutes)
   const timeSlots = [];
   for (let hour = 11; hour <= 21; hour++) {
     for (let min = 0; min < 60; min += 30) {
       const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
       const slotTime = new Date(`${date}T${time}`);
       
-      // Check if this slot is available
       const conflictingReservations = reservations.filter(res => {
         const resTime = new Date(res.date);
         const resEndTime = new Date(resTime.getTime() + 2 * 60 * 60 * 1000);
@@ -298,7 +309,7 @@ export async function addToWaitlist(restaurantId: string, data: {
       guestCount: data.guestCount,
       notes: data.notes || null,
       status: "WAITING",
-      estimatedWait: 30, // Default 30 minutes
+      estimatedWait: 30,
     },
     include: { Customer: true },
   });

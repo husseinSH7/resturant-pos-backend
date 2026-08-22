@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
-import { getTables, createTable, transferTable, mergeTables } from "./tables.service.js";
+import * as tableService from "./tables.service.js";
 import { cache } from "../../services/redis.js";
+import {
+  createTableSchema,
+  updateTableSchema,
+} from "./tables.schemas.js";
 
 function getRestaurantId(req: Request): string {
   const id = req.user?.restaurantId;
@@ -10,88 +14,115 @@ function getRestaurantId(req: Request): string {
   return id;
 }
 
-// Helper to invalidate table cache for a restaurant
+function getParamId(req: Request): string {
+  const { id } = req.params;
+  if (!id || typeof id !== "string") {
+    throw { status: 400, message: "Invalid or missing ID" };
+  }
+  return id;
+}
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  const result = {} as T;
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
+  }
+  return result;
+}
+
 async function invalidateTableCache(restaurantId: string) {
   try {
     await cache.del(`restaurant:${restaurantId}:tables`);
-  } catch (_) {
-    // ignore redis errors
-  }
+  } catch (_) { /* ignore */ }
 }
 
+// ===== GET =====
 export async function listTables(req: Request, res: Response) {
   try {
     const restaurantId = getRestaurantId(req);
     const cacheKey = `restaurant:${restaurantId}:tables`;
-
-    // 1. Try cache
     const cached = await cache.get<any[]>(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    // 2. Cache miss – fetch from DB
-    const data = await getTables(restaurantId);
-
-    // 3. Store in cache (1 hour)
+    if (cached) return res.json(cached);
+    const data = await tableService.getTables(restaurantId);
     await cache.set(cacheKey, data, 3600);
-
     res.json(data);
   } catch (error: any) {
-    const status = error.status || 500;
-    res.status(status).json({ message: error.message || "Failed to load tables" });
+    res.status(error.status || 500).json({ message: error.message || "Failed to load tables" });
   }
 }
 
-export async function addTable(req: Request, res: Response) {
+// ===== CREATE =====
+export async function createTableController(req: Request, res: Response) {
   try {
     const restaurantId = getRestaurantId(req);
-    const table = await createTable(restaurantId, req.body);
-
-    // Invalidate cache after creation
+    const parsed = createTableSchema.parse(req.body);
+    const data = stripUndefined(parsed) as any;
+    const table = await tableService.createTable(restaurantId, data);
     await invalidateTableCache(restaurantId);
-
     res.status(201).json(table);
   } catch (error: any) {
-    const status = error.status || 400;
-    res.status(status).json({ message: error.message || "Failed to create table" });
+    res.status(error.status || 400).json({ message: error.message || "Failed to create table" });
   }
 }
 
-export async function transfer(req: Request, res: Response) {
+// ===== UPDATE =====
+export async function updateTableController(req: Request, res: Response) {
   try {
     const restaurantId = getRestaurantId(req);
-
-    const id = req.params.id;
-    if (typeof id !== "string") {
-      return res.status(400).json({ message: "Invalid table ID" });
-    }
-
-    const { targetTableId } = req.body;
-    const result = await transferTable(restaurantId, id, targetTableId);
-
-    // Invalidate cache after transfer
+    const id = getParamId(req);
+    const parsed = updateTableSchema.parse(req.body);
+    const data = stripUndefined(parsed) as any;
+    const table = await tableService.updateTable(restaurantId, id, data);
     await invalidateTableCache(restaurantId);
-
-    res.json(result);
+    res.json(table);
   } catch (error: any) {
-    const status = error.status || 400;
-    res.status(status).json({ message: error.message || "Transfer failed" });
+    res.status(error.status || 400).json({ message: error.message || "Failed to update table" });
   }
 }
 
-export async function merge(req: Request, res: Response) {
+// ===== DELETE =====
+export async function deleteTableController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    await tableService.deleteTable(restaurantId, id);
+    await invalidateTableCache(restaurantId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Failed to delete table" });
+  }
+}
+
+// ===== TRANSFER =====
+export async function transferController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    const { targetTableId } = req.body;
+    if (!targetTableId) throw { status: 400, message: "targetTableId is required" };
+    const result = await tableService.transferTable(restaurantId, id, targetTableId);
+    await invalidateTableCache(restaurantId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Transfer failed" });
+  }
+}
+
+// ===== MERGE =====
+export async function mergeController(req: Request, res: Response) {
   try {
     const restaurantId = getRestaurantId(req);
     const { sourceTableIds, targetTableId } = req.body;
-    const result = await mergeTables(restaurantId, sourceTableIds, targetTableId);
-
-    // Invalidate cache after merge
+    if (!sourceTableIds || !Array.isArray(sourceTableIds) || sourceTableIds.length === 0) {
+      throw { status: 400, message: "sourceTableIds must be a non-empty array" };
+    }
+    if (!targetTableId) throw { status: 400, message: "targetTableId is required" };
+    const result = await tableService.mergeTables(restaurantId, sourceTableIds, targetTableId);
     await invalidateTableCache(restaurantId);
-
     res.json(result);
   } catch (error: any) {
-    const status = error.status || 400;
-    res.status(status).json({ message: error.message || "Merge failed" });
+    res.status(error.status || 400).json({ message: error.message || "Merge failed" });
   }
 }

@@ -51,6 +51,7 @@ model Device {
   deviceId     String      @unique
   deviceType   DeviceType
   name         String?
+  ipAddress    String? 
   lastSeenAt   DateTime?
   isActive     Boolean     @default(true)
   createdAt    DateTime    @default(now())
@@ -676,6 +677,7 @@ enum DeviceType {
   POS
   KDS
   MANAGER_TABLET
+  PRINTER
 }
 
 enum OrderStatus {

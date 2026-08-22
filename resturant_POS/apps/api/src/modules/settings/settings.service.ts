@@ -12,7 +12,6 @@ const defaultOperatingHours = {
 };
 
 export async function getSettings(restaurantId: string) {
-  // Fetch restaurant and settings in parallel
   const [restaurant, settings] = await Promise.all([
     prisma.restaurant.findUnique({
       where: { id: restaurantId },
@@ -27,7 +26,6 @@ export async function getSettings(restaurantId: string) {
     throw new Error("Restaurant not found");
   }
 
-  // If settings don't exist, create defaults
   const effectiveSettings = settings || (await prisma.restaurantSettings.create({
     data: {
       restaurantId,
@@ -47,39 +45,40 @@ export async function getSettings(restaurantId: string) {
     restaurantName: restaurant.name,
     restaurantAddress: restaurant.address || "",
     restaurantPhone: restaurant.phone || "",
-    restaurantEmail: "",  // not stored in DB yet
-    website: "",          // not stored in DB yet
+    restaurantEmail: "",
+    website: "",
     taxRate: Number(effectiveSettings.taxRate),
     taxIncluded: effectiveSettings.taxIncluded,
     currency: effectiveSettings.currency,
     locale: effectiveSettings.locale,
-    receiptHeader: effectiveSettings.receiptHeader,
-    receiptFooter: effectiveSettings.receiptFooter,
+    receiptHeader: effectiveSettings.receiptHeader || "",
+    receiptFooter: effectiveSettings.receiptFooter || "",
     receiptShowCustomerInfo: effectiveSettings.receiptShowCustomerInfo,
     receiptShowServerInfo: effectiveSettings.receiptShowServerInfo,
     enableGratuity: effectiveSettings.enableGratuity,
-    gratuityRates: effectiveSettings.gratuityRates,
-    roundTo: effectiveSettings.roundTo,
-    printerType: "thermal",      // default, not in DB
-    printerIpAddress: "",        // default, not in DB
+    gratuityRates: effectiveSettings.gratuityRates || [],
+    roundTo: effectiveSettings.roundTo || "NONE",
+    printerType: "thermal",
+    printerIpAddress: "",
     operatingHours: defaultOperatingHours,
   };
 }
 
 export async function updateSettings(restaurantId: string, data: any) {
-  // 1. Update restaurant basic info if provided
-  if (data.restaurantName || data.restaurantAddress || data.restaurantPhone) {
+  // 1. Update restaurant
+  const restaurantUpdateData: any = {};
+  if (data.restaurantName !== undefined) restaurantUpdateData.name = data.restaurantName;
+  if (data.restaurantAddress !== undefined) restaurantUpdateData.address = data.restaurantAddress;
+  if (data.restaurantPhone !== undefined) restaurantUpdateData.phone = data.restaurantPhone;
+
+  if (Object.keys(restaurantUpdateData).length > 0) {
     await prisma.restaurant.update({
       where: { id: restaurantId },
-      data: {
-        ...(data.restaurantName && { name: data.restaurantName }),
-        ...(data.restaurantAddress && { address: data.restaurantAddress }),
-        ...(data.restaurantPhone && { phone: data.restaurantPhone }),
-      },
+      data: restaurantUpdateData,
     });
   }
 
-  // 2. Upsert RestaurantSettings with only known fields
+  // 2. Update settings
   const settingsData: any = {};
   if (data.taxRate !== undefined) settingsData.taxRate = new Prisma.Decimal(data.taxRate);
   if (data.taxIncluded !== undefined) settingsData.taxIncluded = data.taxIncluded;
@@ -114,7 +113,7 @@ export async function updateSettings(restaurantId: string, data: any) {
     });
   }
 
-  // 3. Return fresh settings with restaurant info
+  // 3. Return fresh settings
   return getSettings(restaurantId);
 }
 

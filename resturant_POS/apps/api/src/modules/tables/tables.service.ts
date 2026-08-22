@@ -48,41 +48,14 @@ export async function createTable(
   return mapTable(table);
 }
 
-export async function updateTablePosition(
-  restaurantId: string,
-  tableId: string,
-  data: { x?: number; y?: number; width?: number; height?: number; rotation?: number }
-) {
-  const table = await prisma.table.findFirst({
-    where: { id: tableId, restaurantId },
-  });
-
-  if (!table) throw new Error("Table not found");
-
-  const updated = await prisma.table.update({
-    where: { id: tableId },
-    data: {
-      ...(data.x !== undefined && { x: data.x }),
-      ...(data.y !== undefined && { y: data.y }),
-      ...(data.width !== undefined && { width: data.width }),
-      ...(data.height !== undefined && { height: data.height }),
-      ...(data.rotation !== undefined && { rotation: data.rotation }),
-    },
-    include: { TableArea: true },
-  });
-
-  return mapTable(updated);
-}
-
 export async function updateTable(
   restaurantId: string,
   tableId: string,
-  data: { name?: string; seats?: number; areaId?: string; shape?: string; isActive?: boolean }
+  data: { name?: string; seats?: number; areaId?: string; shape?: string; isActive?: boolean; status?: TableStatus; guestCount?: number; notes?: string }
 ) {
   const table = await prisma.table.findFirst({
     where: { id: tableId, restaurantId },
   });
-
   if (!table) throw new Error("Table not found");
 
   const updated = await prisma.table.update({
@@ -93,6 +66,9 @@ export async function updateTable(
       ...(data.areaId !== undefined && { areaId: data.areaId }),
       ...(data.shape !== undefined && { shape: normalizeShape(data.shape) }),
       ...(data.isActive !== undefined && { isActive: data.isActive }),
+      ...(data.status !== undefined && { status: data.status }),
+      ...(data.guestCount !== undefined && { guestCount: data.guestCount }),
+      ...(data.notes !== undefined && { notes: data.notes }),
     },
     include: { TableArea: true },
   });
@@ -105,14 +81,11 @@ export async function deleteTable(restaurantId: string, tableId: string) {
     where: { id: tableId, restaurantId },
     include: { orders: { where: { status: OrderStatus.OPEN } } },
   });
-
   if (!table) throw new Error("Table not found");
   if (table.orders.length > 0) throw new Error("Cannot delete table with open orders");
 
-  await prisma.table.delete({
-    where: { id: tableId },
-  });
-
+  // Hard delete (or soft delete if you prefer)
+  await prisma.table.delete({ where: { id: tableId } });
   return { success: true };
 }
 
@@ -231,5 +204,8 @@ function mapTable(t: any) {
     isActive: t.isActive,
     hasOpenOrder: !!openOrderId,
     openOrderId,
+    guestCount: t.guestCount ?? null,
+    occupiedSince: t.occupiedSince?.toISOString() ?? null,
+    currentOrderId: openOrderId,
   };
 }
