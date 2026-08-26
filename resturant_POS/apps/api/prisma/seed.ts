@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaClient, UserRole, TableStatus, OrderStatus, OrderType, PaymentMethod, KitchenStatus, SubscriptionStatus } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 
 const SALT_ROUNDS = 10;
 
@@ -300,6 +301,27 @@ async function main() {
     where: { restaurantId_name: { restaurantId: restaurant.id, name: "2" } },
     update: {},
     create: { restaurantId: restaurant.id, name: "2", seats: 2, areaId: tableArea.id, shape: "SQUARE", status: TableStatus.AVAILABLE },
+  });
+
+  // Create virtual printer for testing
+  const virtualPrinter = await prisma.device.upsert({
+    where: { deviceId: "VIRTUAL-PRINTER-001" },
+    update: {
+      name: "Virtual Test Printer",
+      ipAddress: "127.0.0.1",
+      isActive: true,
+      lastSeenAt: new Date(),
+    },
+    create: {
+      id: crypto.randomUUID(),
+      restaurantId: restaurant.id,
+      deviceId: "VIRTUAL-PRINTER-001",
+      deviceType: "PRINTER",
+      name: "Virtual Test Printer",
+      ipAddress: "127.0.0.1",
+      isActive: true,
+      lastSeenAt: new Date(),
+    },
   });
 
   const customer = await prisma.customer.upsert({

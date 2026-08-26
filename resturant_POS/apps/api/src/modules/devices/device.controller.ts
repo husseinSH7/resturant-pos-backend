@@ -269,4 +269,18 @@ async function sendPrintJob(ip: string, content: string): Promise<void> {
       reject(new Error('Print timeout'));
     }, 10000);
   });
+
+  // For virtual printer testing, uncomment below:
+  /*
+  console.log('==========================================');
+  console.log('📠 VIRTUAL PRINTER OUTPUT');
+  console.log('==========================================');
+  console.log(`Printer IP: ${ip}`);
+  console.log(`Time: ${new Date().toLocaleString()}`);
+  console.log('==========================================');
+  console.log(content);
+  console.log('==========================================');
+  console.log('✅ Print job completed successfully');
+  console.log('==========================================');
+  */
 }

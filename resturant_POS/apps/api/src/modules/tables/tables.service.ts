@@ -7,7 +7,11 @@ export async function getTables(restaurantId: string) {
     where: { restaurantId, isActive: true },
     orderBy: { name: "asc" },
     include: {
-      orders: { where: { status: { in: [OrderStatus.OPEN, OrderStatus.PAID] } }, orderBy: { createdAt: "desc" }, take: 1 },
+      orders: { 
+        where: { status: { in: [OrderStatus.OPEN, OrderStatus.PAID] } }, 
+        orderBy: { createdAt: "desc" }, 
+        take: 1 
+      },
       TableArea: true,
     },
   });
@@ -87,6 +91,26 @@ export async function deleteTable(restaurantId: string, tableId: string) {
   // Hard delete (or soft delete if you prefer)
   await prisma.table.delete({ where: { id: tableId } });
   return { success: true };
+}
+
+export async function resetTable(restaurantId: string, tableId: string) {
+  const table = await prisma.table.findFirst({
+    where: { id: tableId, restaurantId },
+  });
+  if (!table) throw new Error("Table not found");
+
+  const updated = await prisma.table.update({
+    where: { id: tableId },
+    data: {
+      status: TableStatus.AVAILABLE,
+      paidAt: null,
+      guestCount: 0,
+      notes: null,
+    },
+    include: { TableArea: true },
+  });
+
+  return mapTable(updated);
 }
 
 export async function transferTable(
@@ -187,6 +211,9 @@ function normalizeShape(shape?: string) {
 
 function mapTable(t: any) {
   const openOrderId = t.orders?.find((o: any) => o.status === OrderStatus.OPEN)?.id ?? null;
+  const paidOrderId = t.orders?.find((o: any) => o.status === OrderStatus.PAID)?.id ?? null;
+  const currentOrderId = openOrderId || paidOrderId;
+  
   return {
     id: t.id,
     name: t.name,
@@ -203,9 +230,12 @@ function mapTable(t: any) {
     status: t.status,
     isActive: t.isActive,
     hasOpenOrder: !!openOrderId,
+    hasPaidOrder: !!paidOrderId,
     openOrderId,
+    paidOrderId,
+    currentOrderId,
     guestCount: t.guestCount ?? null,
     occupiedSince: t.occupiedSince?.toISOString() ?? null,
-    currentOrderId: openOrderId,
+    paidAt: t.paidAt?.toISOString() ?? null,
   };
 }

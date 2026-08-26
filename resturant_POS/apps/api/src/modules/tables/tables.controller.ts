@@ -126,3 +126,16 @@ export async function mergeController(req: Request, res: Response) {
     res.status(error.status || 400).json({ message: error.message || "Merge failed" });
   }
 }
+
+// ===== RESET =====
+export async function resetController(req: Request, res: Response) {
+  try {
+    const restaurantId = getRestaurantId(req);
+    const id = getParamId(req);
+    const table = await tableService.resetTable(restaurantId, id);
+    await invalidateTableCache(restaurantId);
+    res.json(table);
+  } catch (error: any) {
+    res.status(error.status || 400).json({ message: error.message || "Reset failed" });
+  }
+}
