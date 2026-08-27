@@ -1,34 +1,39 @@
-app = "restaurant-pos-api"
-primary_region = "iad"
+# fly.toml app configuration file generated for resturant-pos-api on 2026-08-27T20:05:26Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'resturant-pos-api'
+primary_region = 'cdg'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  NODE_ENV = "production"
-  PORT = "4000"
-  API_BASE_URL = "https://restaurant-pos-api.fly.dev/api/v1"
-  WEBSOCKET_URL = "wss://restaurant-pos-api.fly.dev"
-  STORAGE_BUCKET = "restaurant-pos-assets"
-  ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
-  UPSTASH_REDIS_REST_URL = "https://game-hamster-165103.upstash.io"
+  ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:3000'
+  API_BASE_URL = 'https://restaurant-pos-api.fly.dev/api/v1'
+  NODE_ENV = 'production'
+  PORT = '4000'
+  STORAGE_BUCKET = 'restaurant-pos-assets'
+  UPSTASH_REDIS_REST_URL = 'https://game-hamster-165103.upstash.io'
+  WEBSOCKET_URL = 'wss://restaurant-pos-api.fly.dev'
 
 [http_service]
   internal_port = 4000
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
   [[http_service.checks]]
-    interval = "15s"
-    timeout = "10s"
-    grace_period = "5s"
-    method = "GET"
-    path = "/health"
+    interval = '15s'
+    timeout = '10s'
+    grace_period = '5s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  cpu_kind = "shared"
+  cpu_kind = 'shared'
   cpus = 1
   memory_mb = 512
