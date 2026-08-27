@@ -1,50 +1,50 @@
-# Stage 1: Build the application
-FROM node:20 AS builder
+# Build stage
+FROM node:20-alpine AS builder
 
-WORKDIR /usr/src/app
+RUN apk add --no-cache openssl
 
-# Copy package files
+WORKDIR /app
+
+# Copy root + api package.json first (better layer caching)
 COPY package*.json ./
+COPY apps/api/package*.json ./apps/api/
 
-# Install dependencies
-RUN npm install
+# Copy prisma schema (adjust path if it's elsewhere)
+COPY apps/api/prisma ./apps/api/prisma/
 
-# Copy application source
-COPY . .
+# Install deps for the whole workspace
+RUN npm install --legacy-peer-deps
+
+# Copy the api app source
+COPY apps/api ./apps/api
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
-# Build TypeScript
-RUN npm run build
+# Build only the api app
+RUN npm run build --workspace=apps/api
 
+# ---------------------------------------------
 
-# Stage 2: Production image
-FROM node:20
+# Production stage
+FROM node:20-alpine
 
-WORKDIR /usr/src/app
+RUN apk add --no-cache openssl
 
-# Copy package files
-COPY package*.json ./
+WORKDIR /app
 
-# Install production dependencies
-RUN npm install --omit=dev
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder /app/apps/api/package*.json ./apps/api/
+COPY --from=builder /app/package*.json ./
 
-# Copy compiled application
-COPY --from=builder /usr/src/app/dist ./dist
+WORKDIR /app/apps/api
 
-# Copy Prisma files
-COPY --from=builder /usr/src/app/prisma ./prisma
-
-# Copy generated Prisma client
-COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-
-# Production environment
 ENV NODE_ENV=production
 ENV PORT=4000
 
 EXPOSE 4000
 
-USER node
-
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && npm run seed && node dist/server.js"]
