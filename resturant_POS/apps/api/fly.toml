@@ -1,14 +1,17 @@
-# Fly.io configuration for API deployment
-
 app = "restaurant-pos-api"
 primary_region = "iad"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "Dockerfile"  # Just "Dockerfile" since it's in the same directory
 
 [env]
   NODE_ENV = "production"
   PORT = "4000"
+  API_BASE_URL = "https://restaurant-pos-api.fly.dev/api/v1"
+  WEBSOCKET_URL = "wss://restaurant-pos-api.fly.dev"
+  STORAGE_BUCKET = "restaurant-pos-assets"
+  ALLOWED_ORIGINS = "http://localhost:5173,http://localhost:3000"
+  UPSTASH_REDIS_REST_URL = "https://game-hamster-165103.upstash.io"
 
 [http_service]
   internal_port = 4000

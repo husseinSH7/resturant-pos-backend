@@ -1,14 +1,13 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Stage 1: Build the Application
+FROM node:20 AS builder
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Copy package files (now relative to apps/api)
+COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Install all dependencies
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -19,44 +18,31 @@ RUN npx prisma generate
 # Build TypeScript
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS production
+# Stage 2: Create Production Image
+FROM node:20
 
-WORKDIR /app
-
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+WORKDIR /usr/src/app
 
 # Copy package files
-COPY package.json package-lock.json* ./
+COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production && \
-    npm cache clean --force
+# Install ONLY production dependencies
+RUN npm install --production
 
-# Copy built application and Prisma files from builder
-COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+# Copy built application from builder
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 
-# Generate Prisma client in production
-RUN npx prisma generate
-
-# Switch to non-root user
-USER nodejs
+# Set environment variables
+ENV PORT=4000
+ENV NODE_ENV=production
 
 # Expose port
-EXPOSE 4000
+EXPOSE $PORT
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:4000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
+# Use non-root user
+USER node
 
 # Start the application
 CMD ["node", "dist/server.js"]
