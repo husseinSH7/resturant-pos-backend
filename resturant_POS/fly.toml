@@ -2,7 +2,8 @@ app = "restaurant-pos-api"
 primary_region = "iad"
 
 [build]
-  dockerfile = "Dockerfile"
+  # Tell Fly where to find your Dockerfile
+  dockerfile = "apps/api/Dockerfile"
 
 [env]
   NODE_ENV = "production"

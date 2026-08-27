@@ -3,14 +3,14 @@ FROM node:20 AS builder
 
 WORKDIR /usr/src/app
 
-# Copy package files (now relative to apps/api)
-COPY package*.json ./
+# Copy package files from the api subdirectory
+COPY apps/api/package*.json ./
 
 # Install all dependencies
 RUN npm install
 
-# Copy source code
-COPY . .
+# Copy source code from api subdirectory
+COPY apps/api/ .
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -24,7 +24,7 @@ FROM node:20
 WORKDIR /usr/src/app
 
 # Copy package files
-COPY package*.json ./
+COPY apps/api/package*.json ./
 
 # Install ONLY production dependencies
 RUN npm install --production
