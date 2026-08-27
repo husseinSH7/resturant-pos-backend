@@ -2,7 +2,7 @@ app = "restaurant-pos-api"
 primary_region = "iad"
 
 [build]
-  dockerfile = ".fly/Dockerfile"
+  dockerfile = "Dockerfile"
 
 [env]
   NODE_ENV = "production"
